@@ -1,28 +1,11 @@
 'use client';
 
-import Image from 'next/image';
+import Link from 'next/link';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 export default function Home() {
   return (
     <main>
-      {/* NAVBAR */}
-      <nav className="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
-        <div className="container">
-          <a className="navbar-brand d-flex align-items-center" href="#">
-            <Image
-              src="/logo-fascargo.png"
-              alt="Logo FasCargo"
-              width={50}
-              height={50}
-              style={{ objectFit: 'contain' }}
-              className="me-2"
-            />
-            <span className="fw-bold fs-4 text-primary">Portal Facturación</span>
-          </a>
-        </div>
-      </nav>
-
       {/* WELCOME SECTION */}
       <section className="container text-center py-5">
         <h1 className="display-4 fw-bold text-dark mb-3">
@@ -33,8 +16,12 @@ export default function Home() {
         </p>
 
         <div className="d-flex justify-content-center gap-3 mt-4">
-          <button className="btn btn-primary btn-lg px-4">Ingresar al sistema</button>
-          <button className="btn btn-outline-primary btn-lg px-4">Ver facturas</button>
+          <Link href="/login" className="btn btn-primary btn-lg px-4">
+            Ingresar al sistema
+          </Link>
+          <Link href="/dashboard" className="btn btn-outline-primary btn-lg px-4">
+            Ver facturas
+          </Link>
         </div>
       </section>
     </main>
