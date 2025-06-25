@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Navbar from '@/components/Navbar';
+import Navbar from 'src/components/Navbar';
 import './globals.css'; // Asegúrate de que exista o quita esta línea
 
 export const metadata: Metadata = {
