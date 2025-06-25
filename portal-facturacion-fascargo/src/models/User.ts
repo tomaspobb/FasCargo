@@ -3,14 +3,13 @@ import mongoose, { Schema, model, models } from 'mongoose';
 
 const UserSchema = new Schema(
   {
-    userId: { type: String, required: true, unique: true },
-    secret2FA: { type: String, required: true },
-    email: { type: String, required: false }, // ← solo opcional
-    createdAt: { type: Date, default: Date.now },
-    lastLogin: { type: Date }
+    email: { type: String, required: true, unique: true },
+    passwordHash: { type: String, required: true },
+    secret2FA: { type: String }, // ← se añade después del setup
+    lastLogin: { type: Date },
   },
   {
-    timestamps: false
+    timestamps: true,
   }
 );
 

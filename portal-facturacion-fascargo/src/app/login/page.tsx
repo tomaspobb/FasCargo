@@ -1,134 +1,75 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
-import { v4 as uuidv4 } from 'uuid';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
-export default function LoginQRPage() {
-  const [userId, setUserId] = useState('');
-  const [secret, setSecret] = useState('');
+export default function LoginPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState('');
-  const [token, setToken] = useState('');
-  const [step, setStep] = useState<'loading' | 'register' | 'verify'>('loading');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const restart = () => {
-    localStorage.removeItem('userId');
-    window.location.reload();
-  };
-
-  useEffect(() => {
-    const localId = localStorage.getItem('userId') || uuidv4();
-    localStorage.setItem('userId', localId);
-    setUserId(localId);
-
-    fetch(`/api/users?userId=${localId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.secret) {
-          setSecret(data.secret);
-          setStep('verify');
-        } else {
-          fetch('/api/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: localId }),
-          })
-            .then(res => res.json())
-            .then(data => {
-              setSecret(data.secret);
-              setStep('register');
-            });
-        }
-      })
-      .catch(() => setError('Error al generar el acceso.'));
-  }, []);
-
-  const handleContinue = () => {
-    if (!email.includes('@')) {
-      setError('Correo no válido');
-      return;
-    }
-    setError('');
-    setStep('verify');
-  };
-
-  const handleVerify = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const res = await fetch('/api/verify-2fa', {
+    const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, token }),
+      body: JSON.stringify({ email, password }),
     });
 
     const data = await res.json();
+
     if (!res.ok || data.error) {
-      setError(data.error || 'Código inválido');
+      setError(data.error || 'Error de autenticación');
       return;
     }
 
-    // Solo guardar si el código es válido
-    await fetch('/api/users', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, email }),
-    });
+    // Guardamos userId para usar luego
+    localStorage.setItem('userId', data.userId);
 
-    window.location.href = '/dashboard';
+    // Redirigir según si tiene 2FA activado
+    if (data.has2FA) {
+      router.push('/dashboard');
+    } else {
+      router.push('/setup-2fa');
+    }
   };
 
   return (
-    <main className="container d-flex justify-content-center align-items-center py-5" style={{ minHeight: '80vh' }}>
-      <div className="bg-white p-5 rounded shadow text-center" style={{ maxWidth: 460, width: '100%' }}>
-        <h2 className="mb-4 fw-bold text-primary">
-          {step === 'register' ? 'Registra tu dispositivo' : 'Verifica tu identidad'}
-        </h2>
-
-              {step === 'register' && secret && (
-        <>
-          <p>Escanea este código con Microsoft Authenticator</p>
-          <QRCodeCanvas
-            value={`otpauth://totp/FasCargo%20Chile?secret=${secret}&issuer=FasCargo`}
-            size={180}
+    <main className="container py-5" style={{ maxWidth: 400 }}>
+      <h2 className="text-center fw-bold mb-4 text-primary">Iniciar sesión</h2>
+      <form onSubmit={handleLogin} className="bg-white p-4 rounded shadow-sm">
+        <div className="mb-3">
+          <label className="form-label">Correo institucional</label>
+          <input
+            type="email"
+            className="form-control text-center"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
           />
-          <p className="text-muted small mt-2">Tu acceso estará vinculado a este dispositivo.</p>
+        </div>
 
-            <input
-              type="email"
-              placeholder="Correo institucional"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="form-control text-center mt-4"
-            />
-            <button className="btn btn-primary w-100 mt-3 rounded-pill" onClick={handleContinue}>
-              Guardar y continuar
-            </button>
-          </>
-        )}
+        <div className="mb-3">
+          <label className="form-label">Contraseña</label>
+          <input
+            type="password"
+            className="form-control text-center"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+          />
+        </div>
 
-        {step === 'verify' && (
-          <form onSubmit={handleVerify}>
-            <label className="form-label">Código 2FA</label>
-            <input
-              type="text"
-              value={token}
-              onChange={e => setToken(e.target.value)}
-              className="form-control text-center mb-3"
-              required
-            />
-            <button className="btn btn-success w-100 rounded-pill" type="submit">
-              Ingresar
-            </button>
-            <button className="btn btn-link mt-2 text-danger" type="button" onClick={restart}>
-              ¿Perdiste tu acceso? Generar nuevo código
-            </button>
-          </form>
-        )}
+        <button type="submit" className="btn btn-primary w-100 rounded-pill">
+          Entrar
+        </button>
 
-        {error && <p className="text-danger mt-3 fw-semibold">{error}</p>}
-      </div>
+        {error && <p className="text-danger text-center mt-3">{error}</p>}
+      </form>
     </main>
   );
 }
