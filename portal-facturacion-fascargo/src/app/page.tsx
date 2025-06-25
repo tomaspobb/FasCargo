@@ -1,4 +1,3 @@
-// src/app/page.tsx
 'use client';
 
 import Image from 'next/image';
@@ -8,31 +7,36 @@ export default function Home() {
   return (
     <main>
       {/* NAVBAR */}
-      <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm px-3">
-        <a className="navbar-brand d-flex align-items-center" href="#">
-          <Image
-            src="/logo-fascargo.png"
-            alt="FasCargo Logo"
-            width={40}
-            height={40}
-            className="me-2"
-          />
-          <span className="fs-5 fw-bold text-white">Portal Facturación</span>
-        </a>
+      <nav className="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
+        <div className="container">
+          <a className="navbar-brand d-flex align-items-center" href="#">
+            <Image
+              src="/logo-fascargo.png"
+              alt="Logo FasCargo"
+              width={50}
+              height={50}
+              style={{ objectFit: 'contain' }}
+              className="me-2"
+            />
+            <span className="fw-bold fs-4 text-primary">Portal Facturación</span>
+          </a>
+        </div>
       </nav>
 
-      {/* WELCOME CONTENT */}
-      <div className="container text-center mt-5">
-        <h1 className="display-5 fw-bold">Bienvenido al Portal de Facturación</h1>
-        <p className="lead text-muted">
-          Aquí podrás cargar, consultar y administrar tus facturas de forma rápida y segura.
+      {/* WELCOME SECTION */}
+      <section className="container text-center py-5">
+        <h1 className="display-4 fw-bold text-dark mb-3">
+          Bienvenido al <span className="text-primary">Portal de Facturación</span>
+        </h1>
+        <p className="lead text-secondary mb-4">
+          Carga, consulta y administra tus facturas de forma rápida, ordenada y segura.
         </p>
-        <hr />
-        <div className="d-flex justify-content-center gap-4 mt-4">
-          <button className="btn btn-primary btn-lg">Ingresar al sistema</button>
-          <button className="btn btn-outline-secondary btn-lg">Ver facturas</button>
+
+        <div className="d-flex justify-content-center gap-3 mt-4">
+          <button className="btn btn-primary btn-lg px-4">Ingresar al sistema</button>
+          <button className="btn btn-outline-primary btn-lg px-4">Ver facturas</button>
         </div>
-      </div>
+      </section>
     </main>
   );
 }

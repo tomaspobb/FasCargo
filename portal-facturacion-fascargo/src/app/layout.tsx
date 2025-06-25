@@ -1,14 +1,14 @@
 // src/app/layout.tsx
-export const metadata = {
-  title: "Portal Facturación",
-  description: "Gestión de facturas FasCargo",
+
+import './globals.css';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Portal Facturación | FasCargo',
+  description: 'Sistema de gestión de facturas FasCargo',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
       <head>
@@ -21,7 +21,9 @@ export default function RootLayout({
           defer
         ></script>
       </head>
-      <body>{children}</body>
+      <body className="bg-light text-dark" style={{ minHeight: '100vh' }}>
+        {children}
+      </body>
     </html>
   );
 }
