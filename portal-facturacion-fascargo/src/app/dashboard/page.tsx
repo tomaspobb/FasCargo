@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 export default function DashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
@@ -21,8 +22,17 @@ export default function DashboardPage() {
           setIsAdmin(true);
         }
       })
-      .catch(() => setIsAdmin(false));
+      .catch(() => setIsAdmin(false))
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) {
+    return (
+      <main className="container py-5 text-center">
+        <h4 className="text-muted">Cargando panel...</h4>
+      </main>
+    );
+  }
 
   return (
     <main className="container py-5">
