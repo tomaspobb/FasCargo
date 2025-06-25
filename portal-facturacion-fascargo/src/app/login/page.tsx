@@ -12,12 +12,17 @@ export default function LoginQRPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
+  const reiniciarQR = () => {
+    localStorage.removeItem('userId');
+    window.location.reload();
+  };
+
   useEffect(() => {
     const localId = localStorage.getItem('userId');
     const newId = localId || uuidv4();
     setUserId(newId);
 
-    fetch(`/api/authenticate?userId=${newId}`, { method: 'GET' })
+    fetch(`/api/users?userId=${newId}`)
       .then(async res => {
         const text = await res.text();
         return text ? JSON.parse(text) : {};
@@ -27,7 +32,7 @@ export default function LoginQRPage() {
           setSecret(data.secret);
           setStep('verify');
         } else {
-          fetch('/api/authenticate', {
+          fetch('/api/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: newId }),
@@ -44,7 +49,7 @@ export default function LoginQRPage() {
         }
       })
       .catch(err => {
-        console.error('Error de QR:', err);
+        console.error('Error generando QR:', err);
         setError('No se pudo generar el acceso.');
       })
       .finally(() => setLoading(false));
@@ -83,7 +88,10 @@ export default function LoginQRPage() {
             {step === 'register' && (
               <>
                 <p>Escanea este código con Microsoft Authenticator</p>
-                <QRCodeCanvas value={secret} size={180} />
+                <QRCodeCanvas
+                value={`otpauth://totp/FasCargo%20Chile?secret=${secret}&issuer=FasCargo`}
+                size={180}
+              />
                 <p className="text-muted small mt-2">Tu acceso estará vinculado a este dispositivo.</p>
               </>
             )}
@@ -102,6 +110,9 @@ export default function LoginQRPage() {
                 </div>
                 <button type="submit" className="btn btn-success w-100 rounded-pill">Ingresar</button>
                 {error && <p className="text-danger mt-3 text-center">{error}</p>}
+                <button type="button" className="btn btn-link mt-3 text-danger" onClick={reiniciarQR}>
+                  ¿Perdiste tu acceso? Generar nuevo código QR
+                </button>
               </form>
             )}
           </>

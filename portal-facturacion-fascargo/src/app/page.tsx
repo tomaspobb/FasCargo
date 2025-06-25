@@ -1,27 +1,37 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Container } from 'react-bootstrap';
 
 export default function Home() {
+  const router = useRouter();
+
   return (
-    <main className="bg-light">
-      <section className="container text-center py-5">
-        <h1 className="display-5 fw-bold text-dark mb-3">
+    <main
+      className="d-flex align-items-center justify-content-center"
+      style={{
+        minHeight: '85vh',
+        backgroundColor: '#f8f9fa',
+      }}
+    >
+      <Container
+        className="text-center p-5 shadow-lg bg-white rounded-4"
+        style={{ maxWidth: '700px' }}
+      >
+        <h1 className="display-4 fw-bold text-dark mb-3">
           Gestión de <span className="text-primary">Facturación</span>
         </h1>
-        <p className="text-secondary mb-4">
+        <p className="lead text-muted mb-4">
           Plataforma interna para gestionar tus facturas de forma simple, ordenada y segura.
         </p>
 
-        <div className="d-flex justify-content-center gap-3 mt-4">
-          <Link href="/login" className="btn btn-primary btn-lg px-4 rounded-pill shadow-sm">
-            Ingresar al sistema
-          </Link>
-          <Link href="/dashboard" className="btn btn-outline-primary btn-lg px-4 rounded-pill">
-            Ver facturas
-          </Link>
-        </div>
-      </section>
+        <button
+          className="btn btn-primary btn-lg px-5 py-2 rounded-pill shadow-sm"
+          onClick={() => router.push('/login')}
+        >
+          Ingresar al sistema
+        </button>
+      </Container>
     </main>
   );
 }

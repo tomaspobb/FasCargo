@@ -26,14 +26,8 @@ export default function Navbar() {
           Portal <span className="text-dark">Empresa</span>
         </span>
 
-        {/* Botón de login */}
-        <Link
-          href="/login"
-          className="btn btn-light border rounded-pill px-4 py-2 shadow-sm fw-medium"
-          style={{ transition: 'all 0.2s ease-in-out' }}
-        >
-          Iniciar sesión
-        </Link>
+        {/* No login button, simplificado */}
+        <div style={{ width: '120px' }} /> {/* Espaciado opcional para mantener balance */}
       </div>
     </nav>
   );
