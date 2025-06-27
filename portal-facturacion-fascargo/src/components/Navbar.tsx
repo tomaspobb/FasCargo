@@ -1,3 +1,4 @@
+// src/components/Navbar.tsx
 'use client';
 
 import Image from 'next/image';
@@ -5,10 +6,10 @@ import Link from 'next/link';
 
 export default function Navbar() {
   return (
-    <nav className="bg-white border-bottom shadow-sm py-3 px-4">
-      <div className="container-fluid d-flex justify-content-between align-items-center">
-        {/* Logo + Marca FasCargo */}
-        <Link href="/" className="d-flex align-items-center text-decoration-none">
+    <nav className="bg-white shadow-sm py-3 px-4 border-bottom">
+      <div className="container d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+        {/* Logo y marca */}
+        <Link href="/" className="text-decoration-none d-flex align-items-center">
           <Image
             src="/logo-fascargo.png"
             alt="FasCargo Logo"
@@ -21,13 +22,13 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* Portal Empresa */}
-        <span className="fs-5 fw-bold text-primary d-none d-md-block">
+        {/* Título centrado */}
+        <h1 className="fs-4 fw-bold text-center text-primary m-0">
           Portal <span className="text-dark">Empresa</span>
-        </span>
+        </h1>
 
-        {/* No login button, simplificado */}
-        <div style={{ width: '120px' }} /> {/* Espaciado opcional para mantener balance */}
+        {/* Placeholder para simetría */}
+        <div style={{ width: '150px' }} />
       </div>
     </nav>
   );

@@ -27,7 +27,7 @@ export default function Home() {
 
         <button
           className="btn btn-primary btn-lg px-5 py-2 rounded-pill shadow-sm"
-          onClick={() => router.push('/login')}
+          onClick={() => router.push('/auth')}
         >
           Ingresar al sistema
         </button>

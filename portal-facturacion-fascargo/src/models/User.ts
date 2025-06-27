@@ -1,16 +1,40 @@
-// ✅ src/models/User.ts
 import mongoose, { Schema, model, models } from 'mongoose';
 
-const UserSchema = new Schema(
-  {
-    email: { type: String, required: true, unique: true },
-    passwordHash: { type: String, required: true },
-    secret2FA: { type: String }, // ← se añade después del setup
-    lastLogin: { type: Date },
-  },
-  {
+// Evita redefinir el modelo si ya existe
+if (!models.User) {
+  const UserSchema = new Schema({
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    passwordHash: {
+      type: String,
+      required: true,
+    },
+    secret2FA: {
+      type: String,
+      default: null, // Se genera después del login si se activa 2FA
+    },
+    userId: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
+    lastLogin: {
+      type: Date,
+      default: null,
+    },
+  }, {
     timestamps: true,
-  }
-);
+  });
 
-export const User = models.User || model('User', UserSchema);
+  // Creamos el modelo solo si no existe
+  mongoose.model('User', UserSchema);
+}
+
+// Exportamos el modelo ya creado o existente
+export const User = models.User as mongoose.Model<any>;

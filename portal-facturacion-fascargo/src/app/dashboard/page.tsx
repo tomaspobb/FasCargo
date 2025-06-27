@@ -9,12 +9,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
-
     if (!userId) {
+      // Si no hay usuario autenticado, redirige al login
       window.location.href = '/login';
       return;
     }
 
+    // Buscar si el usuario es admin para mostrar sección extra
     fetch(`/api/users?userId=${userId}`)
       .then(res => res.json())
       .then(data => {
@@ -35,20 +36,29 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="container py-5">
-      <h2 className="fw-bold text-primary mb-4">Bienvenido al panel de administración</h2>
+    <main className="container py-5 text-center">
+      <h1 className="fw-bold mb-4 text-primary">Bienvenido a tu panel</h1>
 
-      <div className="bg-white p-4 rounded shadow-sm text-center">
-        <p className="mb-4 text-secondary">
-          Desde aquí puedes gestionar el acceso y verificar los dispositivos autenticados.
+      <div className="bg-white p-4 rounded shadow-sm mb-4">
+        <p className="lead text-secondary mb-3">
+          Accediste correctamente con doble autenticación. Ahora puedes navegar con seguridad.
         </p>
 
-        {isAdmin && (
-          <Link href="/users" className="btn btn-outline-primary px-4 py-2 rounded-pill">
+        <p className="text-muted">
+          Desde este panel puedes gestionar tu sesión y tus accesos. Si eres administrador, puedes controlar los dispositivos registrados.
+        </p>
+      </div>
+
+      {isAdmin && (
+        <div className="mt-4">
+          <Link
+            href="/users"
+            className="btn btn-outline-primary px-4 py-2 rounded-pill fw-semibold"
+          >
             Gestionar dispositivos conectados
           </Link>
-        )}
-      </div>
+        </div>
+      )}
     </main>
   );
 }
