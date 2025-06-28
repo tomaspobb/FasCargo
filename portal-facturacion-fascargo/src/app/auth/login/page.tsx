@@ -9,21 +9,26 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  // Si vienes desde el registro, precarga el email y password
   useEffect(() => {
-    const emailTemp = localStorage.getItem('emailTemp');
-    const passwordTemp = localStorage.getItem('passwordTemp');
+    // Solo si viene del registro, se autocompleta
+    const fromRegister = localStorage.getItem('fromRegister');
+    const savedEmail = localStorage.getItem('email');
+    const savedPassword = localStorage.getItem('passwordTemp');
 
-    if (emailTemp && passwordTemp) {
-      setEmail(emailTemp);
-      setPassword(passwordTemp);
-      localStorage.removeItem('emailTemp');
-      localStorage.removeItem('passwordTemp');
+    if (fromRegister && savedEmail && savedPassword) {
+      setEmail(savedEmail);
+      setPassword(savedPassword);
     }
+
+    // Limpiar datos temporales de registro
+    localStorage.removeItem('email');
+    localStorage.removeItem('passwordTemp');
+    localStorage.removeItem('fromRegister');
   }, []);
 
   const handleLogin = async () => {
     setError('');
+
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -35,23 +40,31 @@ export default function LoginPage() {
     if (!res.ok) {
       setError(data.error || 'Error al iniciar sesión');
     } else {
+      // ✅ Guardar userId y email en localStorage
       localStorage.setItem('userId', data.userId);
-      router.push('/setup-2fa');
+      localStorage.setItem('email', email);
+      localStorage.setItem('2faInProgress', 'true'); // Bandera de sesión 2FA
+
+      // ✅ Dar un pequeño delay antes del redirect para asegurar que se guarde
+      setTimeout(() => {
+        router.push('/auth/2fa');
+      }, 100);
     }
   };
 
   return (
     <main className="container d-flex flex-column align-items-center justify-content-center py-5" style={{ maxWidth: '480px' }}>
       <div className="card shadow p-4 w-100">
-        <h2 className="text-center text-primary mb-4">Ingreso de Usuario</h2>
+        <h2 className="text-center text-secondary mb-4">Iniciar Sesión</h2>
 
-        <label className="form-label">Correo institucional</label>
+        <label className="form-label">Correo electrónico</label>
         <input
           type="email"
           className="form-control mb-3"
           placeholder="tucorreo@fascargo.cl"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
         />
 
         <label className="form-label">Contraseña</label>
@@ -61,6 +74,7 @@ export default function LoginPage() {
           placeholder="******"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
         />
 
         {error && <div className="alert alert-danger">{error}</div>}
@@ -70,7 +84,7 @@ export default function LoginPage() {
           onClick={handleLogin}
           disabled={!email || !password}
         >
-          Ingresar
+          Iniciar sesión
         </button>
       </div>
     </main>

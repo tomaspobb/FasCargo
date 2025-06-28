@@ -51,5 +51,8 @@ export async function POST(req: Request) {
   user.secret2FA = secret.base32;
   await user.save();
 
-  return NextResponse.json({ secret: secret.base32 });
+  return NextResponse.json({
+    secret: secret.base32,
+    email: user.email // ✅ ¡Esto arregla el "undefined"!
+  });
 }

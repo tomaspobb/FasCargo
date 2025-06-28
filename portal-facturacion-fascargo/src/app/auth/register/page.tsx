@@ -11,8 +11,10 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
+  // Genera un userId profesional basado en el correo
   const generateUserIdFromEmail = (email: string) => {
-    const base = email.split('@')[0]
+    const base = email
+      .split('@')[0]
       .replace(/[^a-zA-Z0-9]/g, '')
       .toLowerCase();
 
@@ -22,6 +24,7 @@ export default function RegisterPage() {
     return base + suffix;
   };
 
+  // Actualiza el preview del userId cada vez que cambia el correo
   useEffect(() => {
     if (email.trim()) {
       const generated = generateUserIdFromEmail(email);
@@ -31,6 +34,7 @@ export default function RegisterPage() {
     }
   }, [email]);
 
+  // Maneja el registro
   const handleRegister = async () => {
     setError('');
     const userId = userIdPreview;
@@ -46,10 +50,18 @@ export default function RegisterPage() {
     if (!res.ok) {
       setError(data.error || 'Error al registrar usuario');
     } else {
-      localStorage.setItem('emailTemp', email);
+      // Guardamos datos en localStorage para autocompletar el login
+      localStorage.setItem('userId', userId);
+      localStorage.setItem('email', email);
       localStorage.setItem('passwordTemp', password);
+      localStorage.setItem('fromRegister', 'true');
+
       setSuccess(true);
-      router.push('/auth/login');
+
+      // Espera corta para asegurar que se guarden antes del redireccionamiento
+      setTimeout(() => {
+        router.push('/auth/login');
+      }, 150);
     }
   };
 
@@ -59,7 +71,7 @@ export default function RegisterPage() {
         <h2 className="text-center text-secondary mb-4">Registro de Usuario</h2>
 
         {userIdPreview && (
-          <div className="text-muted small mb-1">
+          <div className="text-muted small mb-3">
             Usuario generado: <strong>{userIdPreview}</strong>
           </div>
         )}
@@ -71,6 +83,7 @@ export default function RegisterPage() {
           placeholder="tucorreo@fascargo.cl"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
         />
 
         <label className="form-label">Contraseña</label>
@@ -80,6 +93,7 @@ export default function RegisterPage() {
           placeholder="******"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
         />
 
         {error && <div className="alert alert-danger">{error}</div>}
