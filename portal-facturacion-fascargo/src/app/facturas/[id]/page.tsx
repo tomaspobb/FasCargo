@@ -2,16 +2,17 @@ import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 
-interface Props {
-  params: { id: string };
+interface Params {
+  id: string;
 }
 
-export default async function VerFacturaPage(props: Props) {
+// Next.js automáticamente le pasa { params } como argumento a las páginas dinámicas
+export default async function VerFacturaPage({ params }: { params: Params }) {
   // Conexión a la base de datos
   await connectToDatabase();
 
   // Se obtiene el ID desde los parámetros
-  const { id } = props.params;
+  const { id } = params;
 
   // Se busca el PDF por ID
   const pdf = await Pdf.findById(id);
