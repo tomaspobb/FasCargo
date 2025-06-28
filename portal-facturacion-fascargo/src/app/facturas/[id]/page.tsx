@@ -2,25 +2,21 @@ import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 
-interface Params {
-  id: string;
-}
-
-// Next.js automáticamente le pasa { params } como argumento a las páginas dinámicas
-export default async function VerFacturaPage({ params }: { params: Params }) {
-  // Conexión a la base de datos
+// Next.js automáticamente provee `params` como prop
+export default async function VerFacturaPage({ params }: { params: { id: string } }) {
+  // Conectar a la base de datos
   await connectToDatabase();
 
-  // Se obtiene el ID desde los parámetros
-  const { id } = params;
+  // Obtener el ID de la URL
+  const id = params.id;
 
-  // Se busca el PDF por ID
+  // Buscar PDF por ID
   const pdf = await Pdf.findById(id);
 
   // Si no se encuentra, mostrar 404
   if (!pdf) return notFound();
 
-  // Mostrar vista de factura
+  // Renderizar
   return (
     <div className="container mt-4">
       <h3 className="mb-3">🧾 Visualizar Factura</h3>
@@ -32,7 +28,7 @@ export default async function VerFacturaPage({ params }: { params: Params }) {
         height="700px"
         style={{ border: '1px solid #ccc' }}
         title="Factura PDF"
-      ></iframe>
+      />
     </div>
   );
 }
