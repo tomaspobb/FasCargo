@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import Navbar from 'src/components/Navbar';
-import './globals.css'; // Asegúrate de que exista o quita esta línea
+import './globals.css';
+import { AuthProvider } from '@/context/AuthContext';
+import NavbarSelector from '@/components/Navbar/NavbarSelector';
 
 export const metadata: Metadata = {
   title: 'Portal Facturación | FasCargo',
@@ -25,8 +26,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         ></script>
       </head>
       <body className="bg-light text-dark">
-        <Navbar />
-        {children}
+        <AuthProvider>
+          <NavbarSelector />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
