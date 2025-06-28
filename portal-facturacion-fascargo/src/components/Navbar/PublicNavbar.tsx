@@ -1,15 +1,14 @@
-// src/components/Navbar.tsx
 'use client';
 
 import Link from 'next/link';
 
-export default function Navbar() {
+export default function PublicNavbar() {
   return (
     <nav className="bg-white shadow-sm py-3 px-4 border-bottom">
       <div className="container d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
-        {/* Marca clickeable a Home */}
+        {/* Logo o marca a la izquierda */}
         <Link href="/" className="text-decoration-none">
-          <span className="fs-5 fw-bold text-primary">FasCargo</span>
+          <span className="fs-5 fw-bold text-primary">FasCargo Chile</span>
         </Link>
 
         {/* Título centrado */}
@@ -17,8 +16,8 @@ export default function Navbar() {
           Portal <span className="text-dark">Empresa</span>
         </h1>
 
-        {/* Placeholder para simetría visual */}
-        <div style={{ width: '100px' }} />
+        {/* Espacio reservado (simetría) */}
+        <div style={{ width: '140px' }} />
       </div>
     </nav>
   );

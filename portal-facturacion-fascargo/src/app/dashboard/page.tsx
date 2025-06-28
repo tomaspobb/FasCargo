@@ -60,7 +60,18 @@ export default function DashboardPage() {
         </div>
 
         {/* Solo para admin */}
-        {isAdmin && (
+      {isAdmin && (
+        <>
+          <div className="mb-3">
+            <Link
+              href="/facturas/subir"
+              className="btn btn-outline-warning px-4 py-2 rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-2"
+            >
+              <i className="bi bi-upload"></i>
+              Subir nueva factura en PDF
+            </Link>
+          </div>
+
           <div>
             <Link
               href="/users"
@@ -70,7 +81,8 @@ export default function DashboardPage() {
               Gestionar dispositivos conectados
             </Link>
           </div>
-        )}
+        </>
+      )}
       </div>
     </main>
   );

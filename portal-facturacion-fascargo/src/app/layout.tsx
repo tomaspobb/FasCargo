@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import NavbarSelector from '@/components/Navbar/NavbarSelector';
+import Footer from '@/components/Footer'; // Asegúrate de que existe en esa ruta
 
 export const metadata: Metadata = {
   title: 'Portal Facturación | FasCargo',
@@ -25,10 +26,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           defer
         ></script>
       </head>
-      <body className="bg-light text-dark">
+      <body className="bg-light text-dark d-flex flex-column min-vh-100">
         <AuthProvider>
           <NavbarSelector />
-          {children}
+          <main className="flex-grow-1">
+            {children}
+          </main>
+          <Footer />
         </AuthProvider>
       </body>
     </html>

@@ -1,54 +1,37 @@
-'use client';
+import { notFound } from 'next/navigation';
+import { connectToDatabase } from '@/lib/mongodb';
+import { Pdf } from '@/models/Pdf';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
+interface Props {
+  params: { id: string };
+}
 
-// Configura la versión del worker
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js`;
+export default async function VerFacturaPage(props: Props) {
+  // Conexión a la base de datos
+  await connectToDatabase();
 
-const invoiceMap: Record<string, { title: string; file: string }> = {
-  '001': { title: 'Factura #001 - Transporte Santiago', file: '/pdfs/001.pdf' },
-  '002': { title: 'Factura #002 - Carga Valparaíso', file: '/pdfs/002.pdf' },
-  '003': { title: 'Factura #003 - Despacho Antofagasta', file: '/pdfs/003.pdf' },
-};
+  // Se obtiene el ID desde los parámetros
+  const { id } = props.params;
 
-export default function VerFacturaPage() {
-  const { id } = useParams();
-  const factura = invoiceMap[id as string];
-  const [numPages, setNumPages] = useState<number | null>(null);
+  // Se busca el PDF por ID
+  const pdf = await Pdf.findById(id);
 
-  if (!factura) {
-    return (
-      <div className="container py-5 text-center">
-        <h2 className="text-danger">Factura no encontrada</h2>
-        <p>Revisa el enlace e intenta nuevamente.</p>
-      </div>
-    );
-  }
+  // Si no se encuentra, mostrar 404
+  if (!pdf) return notFound();
 
+  // Mostrar vista de factura
   return (
-    <div className="container py-4">
-      <h3 className="text-primary fw-bold mb-4">📄 Visualizando {factura.title}</h3>
-      <div className="d-flex justify-content-center">
-        <Document
-          file={factura.file}
-          onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-          loading="Cargando factura..."
-          error="Error al cargar el archivo PDF"
-        >
-          {Array.from(new Array(numPages), (_, index) => (
-            <Page
-              key={`page_${index + 1}`}
-              pageNumber={index + 1}
-              width={800}
-              className="border mb-4 shadow-sm rounded-3"
-            />
-          ))}
-        </Document>
-      </div>
+    <div className="container mt-4">
+      <h3 className="mb-3">🧾 Visualizar Factura</h3>
+      <p><strong>Archivo:</strong> {pdf.url.split('/').pop()}</p>
+      <p><strong>Subido el:</strong> {new Date(pdf.createdAt).toLocaleString()}</p>
+      <iframe
+        src={pdf.url}
+        width="100%"
+        height="700px"
+        style={{ border: '1px solid #ccc' }}
+        title="Factura PDF"
+      ></iframe>
     </div>
   );
 }
