@@ -14,20 +14,9 @@ export default function PdfUploadPage() {
     e.preventDefault();
     setError(null);
 
-    if (!file) {
-      setError('Selecciona un archivo PDF antes de continuar.');
-      return;
-    }
-
-    if (file.type !== 'application/pdf') {
-      setError('Solo se permiten archivos PDF.');
-      return;
-    }
-
-    if (!name.trim()) {
-      setError('Debes ingresar un título para la factura.');
-      return;
-    }
+    if (!file) return setError('Selecciona un archivo PDF antes de continuar.');
+    if (file.type !== 'application/pdf') return setError('Solo se permiten archivos PDF.');
+    if (!name.trim()) return setError('Debes ingresar un título para la factura.');
 
     setLoading(true);
 
@@ -42,7 +31,7 @@ export default function PdfUploadPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al subir');
+      if (!res.ok) throw new Error(data.error || 'Error al subir el archivo');
 
       setResponse(data);
       setFile(null);
@@ -97,7 +86,7 @@ export default function PdfUploadPage() {
           </button>
         </form>
 
-        {response && (
+        {response && response.url && (
           <div className="mt-5">
             <div className="alert alert-success rounded-4 p-4 shadow-sm">
               <h5 className="fw-bold">✅ PDF subido correctamente</h5>
@@ -123,7 +112,7 @@ export default function PdfUploadPage() {
                 marginTop: '20px',
               }}
               title="PDF Subido"
-            ></iframe>
+            />
 
             <div className="d-flex gap-3 mt-4">
               <Link

@@ -2,10 +2,9 @@ import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 import Link from 'next/link';
+import { DeletePdfButton } from '@/components/DeletePdfButton';
 
-// Este componente es completamente del lado del servidor
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
-  // ✅ A partir de Next.js 15, params es una promesa y debe ser resuelta
   const { id } = await params;
 
   await connectToDatabase();
@@ -41,12 +40,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
             <button className="btn btn-outline-primary">← Volver al listado</button>
           </Link>
 
-          {/* Formulario clásico que envía POST a la API para eliminar */}
-          <form action={`/api/pdf/${id}`} method="POST">
-            <button type="submit" className="btn btn-danger">
-              🗑️ Eliminar factura
-            </button>
-          </form>
+          {/* ✅ Componente Cliente para eliminar */}
+          <DeletePdfButton id={id} />
         </div>
       </div>
     </main>
