@@ -6,23 +6,45 @@ import Link from 'next/link';
 export default function PdfUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [response, setResponse] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Maneja la subida del archivo PDF
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) return alert('Selecciona un PDF primero');
+    setError(null);
 
-    const formData = new FormData();
-    formData.append('file', file);
+    if (!file) {
+      setError('Selecciona un archivo PDF antes de continuar.');
+      return;
+    }
 
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
+    if (file.type !== 'application/pdf') {
+      setError('Solo se permiten archivos PDF.');
+      return;
+    }
 
-    const data = await res.json();
-    setResponse(data);
-    setFile(null); // Reinicia el input
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al subir');
+
+      setResponse(data);
+      setFile(null);
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      setError(err.message || 'Error al subir el archivo');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -38,22 +60,33 @@ export default function PdfUploadPage() {
               accept="application/pdf"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="form-control"
+              disabled={loading}
             />
           </div>
 
-          <button type="submit" className="btn btn-primary rounded-pill px-4 mt-2">
-            Subir PDF
+          {error && <div className="alert alert-danger rounded-3">{error}</div>}
+
+          <button
+            type="submit"
+            className="btn btn-primary rounded-pill px-4 mt-2"
+            disabled={loading}
+          >
+            {loading ? 'Subiendo...' : 'Subir PDF'}
           </button>
         </form>
 
-        {/* Muestra el resultado luego de subir */}
         {response && (
           <div className="mt-5">
             <div className="alert alert-success rounded-4 p-4 shadow-sm">
               <h5 className="fw-bold">✅ PDF subido correctamente</h5>
-              <p><strong>Nombre:</strong> {response?.url?.split('/').pop() || 'Sin nombre'}</p>
+              <p><strong>Nombre:</strong> {response?.url?.split('/').pop()}</p>
               <p><strong>Subido el:</strong> {new Date(response.createdAt).toLocaleString()}</p>
-              <a href={response.url} target="_blank" rel="noreferrer" className="btn btn-outline-primary rounded-pill">
+              <a
+                href={response.url}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-outline-primary rounded-pill"
+              >
                 Ver PDF
               </a>
             </div>
@@ -62,7 +95,11 @@ export default function PdfUploadPage() {
               src={response.url}
               width="100%"
               height="500px"
-              style={{ border: '1px solid #ccc', borderRadius: '12px', marginTop: '20px' }}
+              style={{
+                border: '1px solid #ccc',
+                borderRadius: '12px',
+                marginTop: '20px',
+              }}
               title="PDF Subido"
             ></iframe>
 
@@ -78,6 +115,7 @@ export default function PdfUploadPage() {
                 onClick={() => {
                   setResponse(null);
                   setFile(null);
+                  setError(null);
                 }}
                 className="btn btn-secondary rounded-pill px-4"
               >

@@ -5,10 +5,10 @@ import { FaFilePdf, FaCheckCircle, FaTimesCircle, FaClock } from 'react-icons/fa
 import Link from 'next/link';
 
 interface Invoice {
-  _id: string;
+  id: string;
   url: string;
   createdAt: string;
-  status?: 'Pagada' | 'Pendiente' | 'Vencida'; // temporal, luego será real
+  status?: 'Pagada' | 'Pendiente' | 'Vencida';
   title?: string;
 }
 
@@ -105,7 +105,7 @@ export default function FacturasPage() {
           const status = factura.status!;
 
           return (
-            <div className="col-md-6 col-lg-4" key={factura._id}>
+            <div className="col-md-6 col-lg-4" key={factura.id}>
               <div className="card shadow-sm h-100 border-0 rounded-4">
                 <div className="card-body">
                   <h5 className="card-title fw-semibold mb-2">{factura.title || nombreArchivo}</h5>
@@ -124,7 +124,7 @@ export default function FacturasPage() {
                   <hr />
 
                   <Link
-                    href={`/facturas/${factura._id}`}
+                    href={`/facturas/${factura.id}`}
                     className="btn btn-outline-primary w-100 rounded-pill mt-3"
                   >
                     <FaFilePdf className="me-2" /> Ver Factura

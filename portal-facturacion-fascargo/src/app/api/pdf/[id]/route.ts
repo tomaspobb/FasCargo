@@ -1,25 +1,19 @@
-// 📁 src/app/api/pdf/[id]/route.ts
-
 import { NextRequest } from 'next/server';
-import { Attachment } from '@/lib/gridfs';
-import { Types } from 'mongoose';
+import { GridFS } from '@/lib/gridfs';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const id = new Types.ObjectId(params.id);
-
-    const file = await Attachment.findOne({ _id: id });
-
+    const file = await GridFS.findOne(params.id);
     if (!file) {
       return new Response('Archivo no encontrado', { status: 404 });
     }
 
-    const stream = await Attachment.read({ _id: id });
+    const stream = await GridFS.read(params.id);
 
     return new Response(stream as any, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${file.filename || 'archivo.pdf'}"`,
+        'Content-Disposition': `inline; filename="${file.filename}"`,
       },
     });
   } catch (error) {

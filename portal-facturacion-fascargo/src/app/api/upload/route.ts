@@ -1,43 +1,49 @@
-// 📁 src/app/api/pdf/upload/route.ts
-
-import { NextRequest, NextResponse } from 'next/server';
-import { conn, Attachment } from '@/lib/gridfs'; // Asegúrate de haber creado esto
+import { put } from '@vercel/blob';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
+import { NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const data = await req.formData();
-    const file = data.get('file') as File;
+    console.log('📥 Procesando formulario');
+    const formData = await req.formData();
 
-    // ⛔ Validación del archivo
-    if (!file || file.type !== 'application/pdf') {
-      return NextResponse.json({ error: 'Solo se permiten archivos PDF' }, { status: 400 });
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      console.log('⛔ No se recibió archivo');
+      return NextResponse.json({ error: 'Archivo no recibido' }, { status: 400 });
     }
 
-    // 📦 Convertir a buffer
-    const buffer = Buffer.from(await file.arrayBuffer());
+    console.log('📄 Archivo recibido:', file.name, file.type, file.size);
 
-    // 📚 Conexión a MongoDB
+    const buffer = new Uint8Array(await file.arrayBuffer());
+
+    console.log('📤 Subiendo a Vercel Blob...');
+    const blob = await put(`pdfs/${file.name}`, buffer, {
+      access: 'public',
+      contentType: file.type,
+    });
+
+    console.log('✅ Subido a Blob. URL:', blob.url);
+
+    console.log('🔌 Conectando a MongoDB...');
     await connectToDatabase();
 
-    // 💾 Guardar en GridFS
-    const writeStream = await Attachment.write(
-      {
-        filename: file.name,
-        contentType: file.type,
-      },
-      buffer
+    console.log('💾 Guardando URL en la base de datos...');
+    const newPdf = await Pdf.create({
+      url: blob.url,
+      createdAt: new Date(),
+    });
+
+    console.log('✅ Guardado exitosamente:', newPdf);
+
+    return NextResponse.json(newPdf);
+  } catch (err: any) {
+    console.error('⛔ Error al subir PDF:', err);
+    return NextResponse.json(
+      { error: err?.message || 'Error interno del servidor' },
+      { status: 500 }
     );
-
-    // 🔗 Guardar referencia en colección Pdf
-    const url = `/api/pdf/${writeStream.id}`; // Ruta donde lo puedes visualizar
-    const doc = await Pdf.create({ url });
-
-    // ✅ Devolver metadata
-    return NextResponse.json(doc);
-  } catch (error) {
-    console.error('Error al subir PDF:', error);
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
