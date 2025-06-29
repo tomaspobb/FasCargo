@@ -2,25 +2,13 @@ import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 
-// Next.js proporciona los parámetros directamente como prop "params"
-export default async function VerFacturaPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  // Conectar a MongoDB
+export default async function VerFacturaPage({ params }: { params: { id: string } }) {
   await connectToDatabase();
 
-  // Extraer ID desde los parámetros
-  const { id } = params;
+  const pdf = await Pdf.findById(params.id);
 
-  // Buscar el PDF por ID en MongoDB
-  const pdf = await Pdf.findById(id);
-
-  // Si no se encuentra, retornar 404
   if (!pdf) return notFound();
 
-  // Mostrar la factura PDF en un iframe
   return (
     <div className="container mt-4">
       <h3 className="mb-3">🧾 Visualizar Factura</h3>
