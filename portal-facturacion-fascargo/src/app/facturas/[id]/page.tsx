@@ -2,33 +2,40 @@ import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 
-type Props = {
-  params: {
-    id: string;
-  };
-};
-
-export default async function Page(props: Props) {
-  const { id } = await props.params; // 👈 await aquí según Next.js 15
-
+export default async function Page({ params }: { params: { id: string } }) {
+  // Conexión a la base de datos
   await connectToDatabase();
 
-  const pdf = await Pdf.findById(id);
+  // Buscar PDF por ID
+  const pdf = await Pdf.findById(params.id);
 
+  // Si no existe, mostrar 404
   if (!pdf) return notFound();
 
+  // Obtener nombre limpio del archivo
+  const fileName = decodeURIComponent(pdf.url.split('/').pop() || '').replace(/^\d+-/, '');
+
+  // Renderizar vista
   return (
-    <div className="container mt-4">
-      <h3 className="mb-3">🧾 Visualizar Factura</h3>
-      <p><strong>Archivo:</strong> {pdf.url.split('/').pop()}</p>
-      <p><strong>Subido el:</strong> {new Date(pdf.createdAt).toLocaleString()}</p>
-      <iframe
-        src={pdf.url}
-        width="100%"
-        height="700px"
-        style={{ border: '1px solid #ccc' }}
-        title="Factura PDF"
-      />
+    <div className="container py-5">
+      <div className="bg-white p-4 shadow rounded">
+        <h2 className="mb-4 text-primary-emphasis">🧾 Visualización de Factura</h2>
+        <p className="mb-2">
+          <strong>Nombre del archivo:</strong>{' '}
+          <span className="text-dark">{fileName}</span>
+        </p>
+        <p className="mb-4">
+          <strong>Subido el:</strong>{' '}
+          <span className="text-dark">{new Date(pdf.createdAt).toLocaleString()}</span>
+        </p>
+        <iframe
+          src={pdf.url}
+          width="100%"
+          height="700px"
+          style={{ border: '1px solid #ccc', borderRadius: '8px' }}
+          title="Factura PDF"
+        />
+      </div>
     </div>
   );
 }
