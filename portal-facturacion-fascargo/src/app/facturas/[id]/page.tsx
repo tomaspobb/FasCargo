@@ -2,10 +2,18 @@ import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 
-export default async function VerFacturaPage({ params }: { params: { id: string } }) {
+type Props = {
+  params: {
+    id: string;
+  };
+};
+
+export default async function Page(props: Props) {
+  const { id } = await props.params; // 👈 await aquí según Next.js 15
+
   await connectToDatabase();
 
-  const pdf = await Pdf.findById(params.id);
+  const pdf = await Pdf.findById(id);
 
   if (!pdf) return notFound();
 
