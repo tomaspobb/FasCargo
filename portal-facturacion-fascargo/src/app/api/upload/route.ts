@@ -26,12 +26,12 @@ export async function POST(req: Request) {
 
     console.log('📄 Archivo recibido:', file.name, file.type, file.size);
 
-    // Convertir archivo a buffer para su carga
-    const buffer = new Uint8Array(await file.arrayBuffer());
+    // ✅ Convertir directamente a ArrayBuffer (no Uint8Array)
+    const arrayBuffer = await file.arrayBuffer();
 
     // Subir a Vercel Blob con acceso público
     console.log('📤 Subiendo a Vercel Blob...');
-    const blob = await put(`pdfs/${file.name}`, buffer, {
+    const blob = await put(`pdfs/${file.name}`, arrayBuffer, {
       access: 'public',
       contentType: file.type,
     });
