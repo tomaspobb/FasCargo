@@ -66,11 +66,8 @@ export default function Setup2FA() {
     const data = await res.json();
 
     if (res.ok) {
-      // ✅ Marcar sesión como verificada y limpiar flags anteriores
       localStorage.setItem('sessionVerified', 'true');
       localStorage.removeItem('2faInProgress');
-
-      // 🔁 Redirige y recarga toda la app (incluida la Navbar)
       window.location.href = '/dashboard';
     } else {
       setError(data.error || 'Error al verificar el código');
@@ -113,7 +110,6 @@ export default function Setup2FA() {
           Usuario actual: <span className="text-danger fw-bold">{email}</span>
         </p>
 
-        {/* Inputs separados */}
         <div className="d-flex justify-content-between mb-3">
           {digits.map((digit, i) => (
             <input
@@ -121,7 +117,9 @@ export default function Setup2FA() {
               type="text"
               maxLength={1}
               value={digit}
-              ref={(el) => (inputsRef.current[i] = el!)}
+              ref={(el) => {
+                inputsRef.current[i] = el!;
+              }}
               onChange={(e) => handleChange(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(i, e)}
               className="form-control text-center me-1"
