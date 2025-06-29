@@ -100,7 +100,7 @@ export default function FacturasPage() {
       {/* Facturas */}
       <div className="row g-4">
         {filtered.map((factura) => {
-          const nombreArchivo = factura.url.split('/').pop();
+          const nombreArchivo = factura?.url?.split('/')?.pop() || 'Sin nombre';
           const fecha = new Date(factura.createdAt).toLocaleDateString();
           const status = factura.status!;
 

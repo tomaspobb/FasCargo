@@ -51,7 +51,7 @@ export default function PdfUploadPage() {
           <div className="mt-5">
             <div className="alert alert-success rounded-4 p-4 shadow-sm">
               <h5 className="fw-bold">✅ PDF subido correctamente</h5>
-              <p><strong>Nombre:</strong> {response.url.split('/').pop()}</p>
+              <p><strong>Nombre:</strong> {response?.url?.split('/').pop() || 'Sin nombre'}</p>
               <p><strong>Subido el:</strong> {new Date(response.createdAt).toLocaleString()}</p>
               <a href={response.url} target="_blank" rel="noreferrer" className="btn btn-outline-primary rounded-pill">
                 Ver PDF

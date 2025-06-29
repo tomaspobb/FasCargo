@@ -1,36 +1,57 @@
-import { notFound } from 'next/navigation';
-import { connectToDatabase } from '@/lib/mongodb';
-import { Pdf } from '@/models/Pdf';
+import { notFound } from "next/navigation";
+import { connectToDatabase } from "@/lib/mongodb";
+import { Pdf } from "@/models/pdf";
+import React from "react";
+import Link from "next/link";
 
-// Definimos el componente como async y desestructuramos directamente params
-export default async function Page({ params }: { params: { id: string } }) {
-  // Conectar a la base de datos
+type Params = {
+  params: {
+    id: string;
+  };
+};
+
+// ✅ Declaramos función como `async function` con tipo correcto
+export default async function Page({ params }: Params) {
   await connectToDatabase();
 
-  // Buscar el documento por ID
-  const pdf = await Pdf.findById(params.id);
-
-  // Si no se encuentra, lanzar 404
+ const { id } = await params;
+const pdf = await Pdf.findById(id);
   if (!pdf) return notFound();
 
-  // Limpiar nombre de archivo (eliminar timestamp o hash si existe)
-  const fileName = decodeURIComponent(pdf.url.split('/').pop() || '').replace(/^\d+[-_]/, '');
-
-  // Renderizado visual
   return (
-    <div className="container py-5">
-      <div className="bg-white p-4 shadow rounded">
-        <h2 className="mb-4 text-primary-emphasis">🧾 Visualización de Factura</h2>
-        <p><strong>Nombre del archivo:</strong> <span className="text-dark">{fileName}</span></p>
-        <p><strong>Subido el:</strong> <span className="text-dark">{new Date(pdf.createdAt).toLocaleString()}</span></p>
-        <iframe
-          src={pdf.url}
-          width="100%"
-          height="700px"
-          style={{ border: '1px solid #ccc', borderRadius: '8px' }}
-          title="Factura PDF"
-        />
+    <main className="d-flex flex-column align-items-center justify-content-center min-vh-100 bg-light px-3">
+      <div className="w-100" style={{ maxWidth: "900px" }}>
+        <div className="text-center mb-4">
+          <h1 className="fw-bold text-primary">Visualizador de Factura</h1>
+          <p className="text-secondary">
+            A continuación puedes revisar el documento cargado
+          </p>
+        </div>
+
+        <div
+          className="shadow border rounded overflow-hidden"
+          style={{ height: "75vh" }}
+        >
+          <iframe
+            src={pdf.url}
+            width="100%"
+            height="100%"
+            title="Factura PDF"
+            style={{
+              border: "none",
+              borderRadius: "0.5rem",
+            }}
+          />
+        </div>
+
+        <div className="text-center mt-4">
+          <Link href="/facturas">
+            <button className="btn btn-outline-primary">
+              ← Volver al listado
+            </button>
+          </Link>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
