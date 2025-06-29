@@ -1,30 +1,29 @@
+// src/app/api/pdf/[id]/route.ts
+
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
-import { del } from '@vercel/blob';
 import { NextResponse } from 'next/server';
+import { del } from '@vercel/blob'; // 👈 Importa la función para eliminar
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   try {
-    // 1. Conectar a la base de datos
     await connectToDatabase();
 
-    // 2. Buscar el PDF por ID
-    const pdf = await Pdf.findById(params.id);
-    if (!pdf) {
+    const deleted = await Pdf.findByIdAndDelete(params.id);
+
+    if (!deleted) {
       return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
     }
 
-    // 3. Eliminar el archivo del Blob de Vercel
-    const blobPath = new URL(pdf.url).pathname.slice(1); // quita la "/" del inicio
-    await del(blobPath); // Ejemplo: pdfs/F926.pdf
+    // Eliminar el archivo del Blob
+    const blobUrl = deleted.url;
+    const blobPath = new URL(blobUrl).pathname; // obtiene "/nombre.pdf"
 
-    // 4. Eliminar el documento de MongoDB
-    await Pdf.findByIdAndDelete(params.id);
+    await del(blobPath); // 👈 borra el blob del almacenamiento
 
-    // 5. Redirigir
     return NextResponse.redirect(new URL('/facturas', req.url));
   } catch (err) {
-    console.error('❌ Error al eliminar factura:', err);
+    console.error('❌ Error al eliminar PDF o Blob:', err);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

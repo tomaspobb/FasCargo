@@ -4,10 +4,13 @@ import { Pdf } from '@/models/Pdf';
 import Link from 'next/link';
 
 // Este componente es completamente del lado del servidor
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  // ✅ A partir de Next.js 15, params es una promesa y debe ser resuelta
+  const { id } = await params;
+
   await connectToDatabase();
 
-  const pdf = await Pdf.findById(params.id);
+  const pdf = await Pdf.findById(id);
 
   if (!pdf) return notFound();
 
@@ -39,7 +42,7 @@ export default async function Page({ params }: { params: { id: string } }) {
           </Link>
 
           {/* Formulario clásico que envía POST a la API para eliminar */}
-          <form action={`/api/pdf/${params.id}`} method="POST">
+          <form action={`/api/pdf/${id}`} method="POST">
             <button type="submit" className="btn btn-danger">
               🗑️ Eliminar factura
             </button>
