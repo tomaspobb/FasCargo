@@ -8,8 +8,8 @@ interface Invoice {
   id: string;
   url: string;
   createdAt: string;
+  title?: string; // Se usará como nombre de la factura
   status?: 'Pagada' | 'Pendiente' | 'Vencida';
-  title?: string;
 }
 
 export default function FacturasPage() {
@@ -19,12 +19,14 @@ export default function FacturasPage() {
   const [statusFilter, setStatusFilter] = useState<string>('Todas');
   const [dateOrder, setDateOrder] = useState<string>('Recientes');
 
+  // Verifica si hay sesión iniciada y verificada
   useEffect(() => {
     const userId = localStorage.getItem('userId');
     const verified = localStorage.getItem('sessionVerified') === 'true';
     setIsLoggedIn(!!userId && verified);
   }, []);
 
+  // Carga las facturas si está logueado
   useEffect(() => {
     if (isLoggedIn) {
       fetch('/api/pdf/all')
@@ -40,6 +42,7 @@ export default function FacturasPage() {
     }
   }, [isLoggedIn]);
 
+  // Filtro y orden
   useEffect(() => {
     let result = [...invoices];
 
@@ -97,10 +100,10 @@ export default function FacturasPage() {
         </div>
       </div>
 
-      {/* Facturas */}
+      {/* Tarjetas de facturas */}
       <div className="row g-4">
         {filtered.map((factura) => {
-          const nombreArchivo = factura?.url?.split('/')?.pop() || 'Sin nombre';
+          const nombreArchivo = factura.url.split('/').pop() || 'Sin nombre';
           const fecha = new Date(factura.createdAt).toLocaleDateString();
           const status = factura.status!;
 
@@ -108,7 +111,9 @@ export default function FacturasPage() {
             <div className="col-md-6 col-lg-4" key={factura.id}>
               <div className="card shadow-sm h-100 border-0 rounded-4">
                 <div className="card-body">
-                  <h5 className="card-title fw-semibold mb-2">{factura.title || nombreArchivo}</h5>
+                  <h5 className="card-title fw-semibold mb-2">
+                    {factura.title?.trim() || nombreArchivo}
+                  </h5>
                   <p className="text-muted mb-1">Subida: {fecha}</p>
 
                   <span className={`badge px-3 py-1 rounded-pill 

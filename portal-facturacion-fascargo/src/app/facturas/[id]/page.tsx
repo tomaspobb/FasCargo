@@ -1,37 +1,26 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 import Link from 'next/link';
-import { ObjectId } from 'mongodb';
 
+// Este componente es completamente del lado del servidor
 export default async function Page({ params }: { params: { id: string } }) {
-  // Conectarse a la base de datos
   await connectToDatabase();
 
-  // Buscar el PDF por su ID
   const pdf = await Pdf.findById(params.id);
+
   if (!pdf) return notFound();
 
-  // Función para eliminar (llamará a la API DELETE del backend)
-  const handleDelete = async () => {
-    'use server';
-    const res = await fetch(`/api/pdf/${params.id}`, {
-      method: 'DELETE',
-    });
-
-    if (res.ok) {
-      redirect('/facturas'); // redirige al listado tras borrar
-    } else {
-      console.error('Error al eliminar la factura');
-    }
-  };
+  const nombreFactura = pdf.title?.trim() || pdf.url.split('/').pop() || 'Factura';
 
   return (
     <main className="d-flex flex-column align-items-center justify-content-center min-vh-100 bg-light px-3">
       <div className="w-100" style={{ maxWidth: '900px' }}>
         <div className="text-center mb-4">
           <h1 className="fw-bold text-primary">Visualizador de Factura</h1>
-          <p className="text-secondary">A continuación puedes revisar el documento cargado</p>
+          <p className="text-secondary">
+            A continuación puedes revisar el documento: <strong>{nombreFactura}</strong>
+          </p>
         </div>
 
         <div className="shadow border rounded overflow-hidden" style={{ height: '75vh' }}>
@@ -39,11 +28,8 @@ export default async function Page({ params }: { params: { id: string } }) {
             src={pdf.url}
             width="100%"
             height="100%"
-            title="Factura PDF"
-            style={{
-              border: 'none',
-              borderRadius: '0.5rem',
-            }}
+            title={nombreFactura}
+            style={{ border: 'none', borderRadius: '0.5rem' }}
           />
         </div>
 
@@ -52,8 +38,8 @@ export default async function Page({ params }: { params: { id: string } }) {
             <button className="btn btn-outline-primary">← Volver al listado</button>
           </Link>
 
-          {/* Botón de eliminar factura */}
-          <form action={handleDelete}>
+          {/* Formulario clásico que envía POST a la API para eliminar */}
+          <form action={`/api/pdf/${params.id}`} method="POST">
             <button type="submit" className="btn btn-danger">
               🗑️ Eliminar factura
             </button>

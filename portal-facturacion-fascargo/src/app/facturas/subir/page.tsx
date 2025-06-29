@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 export default function PdfUploadPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState('');
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,11 +24,17 @@ export default function PdfUploadPage() {
       return;
     }
 
+    if (!name.trim()) {
+      setError('Debes ingresar un título para la factura.');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('name', name.trim());
 
       const res = await fetch('/api/upload', {
         method: 'POST',
@@ -39,6 +46,7 @@ export default function PdfUploadPage() {
 
       setResponse(data);
       setFile(null);
+      setName('');
     } catch (err: any) {
       console.error('Upload error:', err);
       setError(err.message || 'Error al subir el archivo');
@@ -54,6 +62,19 @@ export default function PdfUploadPage() {
 
         <form onSubmit={handleUpload}>
           <div className="mb-3">
+            <label className="form-label fw-semibold">Título de la factura</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="form-control"
+              placeholder="Ej: Factura Julio 2025"
+              disabled={loading}
+              required
+            />
+          </div>
+
+          <div className="mb-3">
             <label className="form-label fw-semibold">Selecciona un archivo PDF</label>
             <input
               type="file"
@@ -61,6 +82,7 @@ export default function PdfUploadPage() {
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="form-control"
               disabled={loading}
+              required
             />
           </div>
 
@@ -79,7 +101,7 @@ export default function PdfUploadPage() {
           <div className="mt-5">
             <div className="alert alert-success rounded-4 p-4 shadow-sm">
               <h5 className="fw-bold">✅ PDF subido correctamente</h5>
-              <p><strong>Nombre:</strong> {response?.url?.split('/').pop()}</p>
+              <p><strong>Título:</strong> {response.title}</p>
               <p><strong>Subido el:</strong> {new Date(response.createdAt).toLocaleString()}</p>
               <a
                 href={response.url}
@@ -115,6 +137,7 @@ export default function PdfUploadPage() {
                 onClick={() => {
                   setResponse(null);
                   setFile(null);
+                  setName('');
                   setError(null);
                 }}
                 className="btn btn-secondary rounded-pill px-4"
