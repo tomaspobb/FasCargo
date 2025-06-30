@@ -8,10 +8,10 @@ const ADMIN_EMAIL = 'topoblete@alumnos.uai.cl';
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const { id } = context.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
