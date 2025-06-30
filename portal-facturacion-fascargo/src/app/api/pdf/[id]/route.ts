@@ -3,9 +3,15 @@ import { Pdf } from '@/models/Pdf';
 import { del } from '@vercel/blob';
 import { NextResponse } from 'next/server';
 
+type NextApiContext = {
+  params: {
+    id: string;
+  };
+};
+
 export async function DELETE(
   req: Request,
-  context: { params: { id: string } }
+  context: NextApiContext
 ) {
   try {
     await connectToDatabase();
