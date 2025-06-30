@@ -1,45 +1,38 @@
+// src/app/api/pdf/[id]/route.ts
+
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 import { del } from '@vercel/blob';
-import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
+import { NextResponse } from 'next/server';
 
-const ADMIN_EMAIL = 'topoblete@alumnos.uai.cl';
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } } // ✅ AQUÍ ESTABA EL ERROR
-) {
+// ✅ DELETE: Elimina una factura y su blob asociado
+export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    await connectToDatabase();
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    const { id } = await context.params;
+
+    if (!id) {
       return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
     }
 
-    const userEmail = req.headers.get('x-user-email');
-    if (userEmail !== ADMIN_EMAIL) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-    }
-
-    await connectToDatabase();
-
     const deleted = await Pdf.findByIdAndDelete(id);
+
     if (!deleted) {
       return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
     }
 
     try {
-      const blobPath = new URL(deleted.url).pathname.slice(1);
+      const blobPath = new URL(deleted.url).pathname.slice(1); // Quita "/"
       await del(blobPath);
     } catch (err) {
-      console.warn('⚠️ No se pudo eliminar el blob:', err);
+      console.warn('⚠️ No se pudo eliminar el blob (puede que ya no exista):', err);
     }
 
     return NextResponse.json({ message: 'Factura eliminada correctamente' });
 
   } catch (err) {
-    console.error('❌ Error al eliminar PDF o blob:', err);
+    console.error('❌ Error al eliminar PDF o Blob:', err);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
