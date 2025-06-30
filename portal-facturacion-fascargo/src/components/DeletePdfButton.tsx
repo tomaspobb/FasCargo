@@ -1,20 +1,23 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 
 export function DeletePdfButton({ id }: { id: string }) {
-  const { data: session } = useSession();
+  const { email } = useAuth();
   const router = useRouter();
-
-  // Solo mostrar si el usuario es el admin autorizado
-  if (session?.user?.email !== 'topoblete@alumnos.uai.cl') return null;
 
   const handleDelete = async () => {
     const confirmDelete = confirm('¿Estás seguro de que deseas eliminar esta factura?');
     if (!confirmDelete) return;
 
-    const res = await fetch(`/api/pdf/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/pdf/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-email': email || '',
+      },
+    });
 
     if (res.ok) {
       router.push('/facturas');
@@ -23,6 +26,9 @@ export function DeletePdfButton({ id }: { id: string }) {
       alert(`Error al eliminar: ${data.error || 'Intenta nuevamente'}`);
     }
   };
+
+  // Solo mostrar botón si es el admin
+  if (email !== 'topoblete@alumnos.uai.cl') return null;
 
   return (
     <button onClick={handleDelete} className="btn btn-danger">

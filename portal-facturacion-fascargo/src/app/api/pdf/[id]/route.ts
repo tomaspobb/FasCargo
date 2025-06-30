@@ -1,39 +1,32 @@
-// src/app/api/pdf/[id]/route.ts
-
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 import { del } from '@vercel/blob';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth'; // Asegúrate de que esta ruta sea correcta
 
-export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // 🔐 Verifica si el usuario está autenticado y es el admin
-    if (!session || session.user?.email !== 'topoblete@alumnos.uai.cl') {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
     await connectToDatabase();
-    const { id } = await context.params;
+
+    const { id } = params;
 
     if (!id) {
       return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
     }
 
+    // ✅ Verificar que solo el admin pueda eliminar
+    const email = req.headers.get('x-user-email');
+    if (email !== 'topoblete@alumnos.uai.cl') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    }
+
     const deleted = await Pdf.findByIdAndDelete(id);
+
     if (!deleted) {
       return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
     }
 
-    try {
-      const blobPath = new URL(deleted.url).pathname.slice(1);
-      await del(blobPath);
-    } catch (err) {
-      console.warn('⚠️ No se pudo eliminar el blob (puede que ya no exista):', err);
-    }
+    const blobPath = new URL(deleted.url).pathname.slice(1);
+    await del(blobPath);
 
     return NextResponse.json({ message: 'Factura eliminada correctamente' });
   } catch (err) {
