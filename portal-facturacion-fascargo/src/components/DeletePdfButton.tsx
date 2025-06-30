@@ -1,12 +1,16 @@
 'use client';
 
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 export function DeletePdfButton({ id }: { id: string }) {
+  const { data: session } = useSession();
   const router = useRouter();
 
-  const handleDelete = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Solo mostrar si el usuario es el admin autorizado
+  if (session?.user?.email !== 'topoblete@alumnos.uai.cl') return null;
+
+  const handleDelete = async () => {
     const confirmDelete = confirm('¿Estás seguro de que deseas eliminar esta factura?');
     if (!confirmDelete) return;
 
@@ -21,10 +25,8 @@ export function DeletePdfButton({ id }: { id: string }) {
   };
 
   return (
-    <form onSubmit={handleDelete}>
-      <button type="submit" className="btn btn-danger">
-        🗑️ Eliminar factura
-      </button>
-    </form>
+    <button onClick={handleDelete} className="btn btn-danger">
+      🗑️ Eliminar factura
+    </button>
   );
 }
