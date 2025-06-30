@@ -1,26 +1,24 @@
-// src/app/api/pdf/[id]/route.ts
-
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
-import { del } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 
-// Tipado correcto para App Router en Next.js 13+
-interface Params {
-  params: {
-    id: string;
-  };
-}
+// SOLO permite eliminar si el email es del admin
+const ADMIN_EMAIL = 'topoblete@alumnos.uai.cl';
 
-export async function DELETE(req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, context: { params: { id: string } }) {
   try {
+    const userEmail = req.headers.get('x-user-email');
+    if (userEmail !== ADMIN_EMAIL) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    }
+
     await connectToDatabase();
 
-    const id = params.id;
-    const email = req.headers.get('x-user-email');
+    const { id } = context.params;
 
-    if (email !== 'topoblete@alumnos.uai.cl') {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
     }
 
     const deleted = await Pdf.findByIdAndDelete(id);
@@ -29,12 +27,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
     }
 
-    const blobPath = new URL(deleted.url).pathname.slice(1);
-    await del(blobPath);
-
-    return NextResponse.json({ message: 'Factura eliminada correctamente' });
+    return NextResponse.json({ message: 'Factura eliminada con éxito' }, { status: 200 });
   } catch (error) {
-    console.error('Error al eliminar factura:', error);
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    console.error('Error eliminando PDF:', error);
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
   }
 }
