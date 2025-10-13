@@ -1,6 +1,8 @@
+// src/lib/extractInvoice.ts
 import 'server-only';
 
-export type ExtractedForIPdf = {
+// ---------- helpers ----------
+type ExtractedForIPdf = {
   folio?: string;
   proveedor?: string;
   fechaEmision?: Date;
@@ -8,58 +10,7 @@ export type ExtractedForIPdf = {
   iva?: number;
   total?: number;
 };
-
-// ------------------ helpers ------------------
-function toNumberMoney(input?: string) {
-  if (!input) return undefined;
-  const clean = input
-    .replace(/[^\d,.\-]/g, '')                 // deja dígitos y separadores
-    .replace(/\.(?=\d{3}(\D|$))/g, '')         // quita puntos de miles
-    .replace(',', '.');                        // coma decimal -> punto
-  const n = Number(clean);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function toDateMaybe(s?: string): Date | undefined {
-  if (!s) return undefined;
-
-  // 11 de Septiembre del 2024
-  const m1 = s.match(/(\d{1,2})\s+de\s+([A-Za-zÁÉÍÓÚñ]+)\s+(?:del?\s+)?(\d{4})/i);
-  if (m1) {
-    const d = parseInt(m1[1], 10);
-    const monthStr = m1[2].toLowerCase();
-    const y = parseInt(m1[3], 10);
-    const months: Record<string, number> = {
-      enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
-      julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12
-    };
-    const mo = months[monthStr] || 0;
-    if (mo > 0) {
-      const dt = new Date(y, mo - 1, d);
-      return isNaN(dt.getTime()) ? undefined : dt;
-    }
-  }
-
-  // 11-09-2024 / 11/09/2024
-  const m2 = s.match(/([0-3]?\d)[\/\-\.]([01]?\d)[\/\-\.](\d{2,4})/);
-  if (m2) {
-    const d = parseInt(m2[1], 10);
-    const mo = parseInt(m2[2], 10);
-    let y = parseInt(m2[3], 10);
-    if (y < 100) y += 2000;
-    const dt = new Date(y, mo - 1, d);
-    return isNaN(dt.getTime()) ? undefined : dt;
-  }
-  return undefined;
-}
-
-function lastMatch(regex: RegExp, text: string): RegExpMatchArray | null {
-  let m: RegExpMatchArray | null;
-  let last: RegExpMatchArray | null = null;
-  const r = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : regex.flags + 'g');
-  while ((m = r.exec(text)) !== null) last = m;
-  return last;
-}
+export type { ExtractedForIPdf };
 
 function normalizeSpaces(s: string) {
   return s
@@ -69,79 +20,122 @@ function normalizeSpaces(s: string) {
     .trim();
 }
 
-// ------------------ tu extractor de texto ------------------
-// (deja tu extractTextFromPdfBuffer como ya lo tienes)
+function toNumberMoney(input?: string) {
+  if (!input) return undefined;
+  const clean = input
+    .replace(/[^\d,.\-]/g, '')
+    .replace(/\.(?=\d{3}(\D|$))/g, '')
+    .replace(',', '.');
+  const n = Number(clean);
+  return Number.isFinite(n) ? n : undefined;
+}
 
-// ------------------ extractor principal ------------------
+function toDateMaybe(s?: string): Date | undefined {
+  if (!s) return undefined;
+  const m1 = s.match(/(\d{1,2})\s+de\s+([A-Za-zÁÉÍÓÚñ]+)\s+(?:del?\s+)?(\d{4})/i);
+  if (m1) {
+    const d = +m1[1];
+    const y = +m1[3];
+    const months: Record<string, number> = {
+      enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
+      julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12
+    };
+    const mo = months[m1[2].toLowerCase()] || 0;
+    if (mo) {
+      const dt = new Date(y, mo - 1, d);
+      return isNaN(dt.getTime()) ? undefined : dt;
+    }
+  }
+  const m2 = s.match(/([0-3]?\d)[\/\-\.]([01]?\d)[\/\-\.](\d{2,4})/);
+  if (m2) {
+    const d = +m2[1], mo = +m2[2]; let y = +m2[3];
+    if (y < 100) y += 2000;
+    const dt = new Date(y, mo - 1, d);
+    return isNaN(dt.getTime()) ? undefined : dt;
+  }
+  return undefined;
+}
+
+function lastMatch(regexes: RegExp[], text: string): string | undefined {
+  for (const re0 of regexes) {
+    const re = new RegExp(re0.source, re0.flags.includes('g') ? re0.flags : re0.flags + 'g');
+    let m: RegExpMatchArray | null, last: RegExpMatchArray | null = null;
+    while ((m = re.exec(text)) !== null) last = m;
+    if (last?.[1]) return last[1].trim();
+  }
+  return undefined;
+}
+
+// ---------- extracción real de texto con pdfjs ----------
+async function extractTextWithPdfjs(buffer: Buffer | Uint8Array): Promise<string> {
+  // usamos el build legacy ESM que funciona en Node
+  const pdfjsLib: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+  // en Node no hace falta worker
+  const docTask = pdfjsLib.getDocument({ data: buffer, isEvalSupported: false });
+  const doc = await docTask.promise;
+
+  let parts: string[] = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p);
+    const content = await page.getTextContent({ normalizeWhitespace: true });
+    const text = (content.items as any[])
+      .map((it) => (typeof it.str === 'string' ? it.str : ''))
+      .join('\n'); // mantener saltos para mejorar patrones tipo "Fecha Emisión: ..."
+    parts.push(text);
+    page.cleanup?.();
+  }
+  await doc.cleanup?.();
+  return normalizeSpaces(parts.join('\n'));
+}
+
+// ---------- extractor principal ----------
 export async function extractInvoiceForIPdf(
   buffer: Buffer | Uint8Array
 ): Promise<ExtractedForIPdf> {
-  // Usa tu extractor ligero
-  const raw = extractTextFromPdfBuffer(buffer);
-  const text = normalizeSpaces(raw);
+  const text = await extractTextWithPdfjs(buffer);
 
-  // console.log('=== DEBUG TEXT ===\n', text.slice(0, 2000));
+  // console.log('[PDF TEXT]', text.slice(0, 1500));
 
-  const grab1 = (regexes: RegExp[]): string | undefined => {
-    for (const re of regexes) {
-      const m = text.match(re);
-      if (m?.[1]) return m[1].trim();
-    }
-    return undefined;
-  };
-
-  const grabLastNumber = (regexes: RegExp[]): number | undefined => {
-    for (const re of regexes) {
-      const m = lastMatch(re, text);
-      if (m?.[1]) {
-        const n = toNumberMoney(m[1]);
-        if (typeof n === 'number') return n;
-      }
-    }
-    return undefined;
-  };
-
-  // Proveedor: antes de RUT o antes de "FACTURA ELECTRONICA"
+  // Proveedor (antes de RUT o antes de FACTURA ELECTRONICA)
   const proveedor =
-    grab1([
-      /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+R\.?U\.?T\.?/i,
-      /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+FACTURA\s+ELECTRONICA/i,
-      /(?:raz[oó]n\s+social|emisor|proveedor)\s*[:\-]\s*([^\n]+)/i,
-    ]);
+    text.match(/([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+R\.?U\.?T\.?/i)?.[1]?.trim() ??
+    text.match(/([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+FACTURA\s+ELECTRONICA/i)?.[1]?.trim() ??
+    text.match(/(?:raz[oó]n\s+social|emisor|proveedor)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim();
 
-  // Folio (N°, Nº, No, #) o después de "Factura Electrónica"
+  // Folio
   const folio =
-    grab1([
-      /FACTURA\s+ELECTRONICA\s*(?:N[°º#]\s*|No\.?\s*)?([0-9]{1,10})/i,
-      /\bN[°º#]\s*([0-9]{1,10})\b/i,
-      /\bNo\.?\s*([0-9]{1,10})\b/i,
-    ]);
+    text.match(/FACTURA\s+ELECTRONICA\s*(?:N[°º#]\s*|No\.?\s*)?([0-9]{1,10})/i)?.[1]?.trim() ??
+    text.match(/\bN[°º#]\s*([0-9]{1,10})\b/i)?.[1]?.trim() ??
+    text.match(/\bNo\.?\s*([0-9]{1,10})\b/i)?.[1]?.trim();
 
   // Fecha de emisión
   const fechaStr =
-    grab1([
-      /Fecha\s*Emisi[oó]n\s*[:\-]\s*([^\n]+)/i,
-      /\bEmisi[oó]n\s*[:\-]\s*([^\n]+)/i,
-      /Fecha\s*[:\-]\s*([^\n]+)/i,
-    ]);
+    text.match(/Fecha\s*Emisi[oó]n\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim() ??
+    text.match(/\bEmisi[oó]n\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim() ??
+    text.match(/Fecha\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim();
   const fechaEmision = toDateMaybe(fechaStr);
 
-  // Montos: tomar el ÚLTIMO match (suele ser el cuadro de totales)
-  const neto = grabLastNumber([
-    /MONTO\s+NETO\s*[$:]?\s*([0-9\.\,]+)/i,
-    /\bNETO\s*[$:]?\s*([0-9\.\,]+)/i,
-    /\bSUBTOTAL\s*[$:]?\s*([0-9\.\,]+)/i,
-  ]);
+  // Montos (último match)
+  const netoStr = lastMatch(
+    [/MONTO\s+NETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bNETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bSUBTOTAL\s*[$:]?\s*([0-9\.\,]+)/i],
+    text
+  );
+  const ivaStr = lastMatch(
+    [/I\.?V\.?A\.?(?:\s*\d{1,2}%|)\s*[$:]?\s*([0-9\.\,]+)/i, /IMPUESTO\s*(?:ADICIONAL|IVA)\s*[$:]?\s*([0-9\.\,]+)/i],
+    text
+  );
+  const totalStr = lastMatch(
+    [/TOTAL\s*(?:FACTURA|A\s*PAGAR|GENERAL|)\s*[$:]?\s*([0-9\.\,]+)/i, /MONTO\s*TOTAL\s*[$:]?\s*([0-9\.\,]+)/i],
+    text
+  );
 
-  const iva = grabLastNumber([
-    /I\.?V\.?A\.?(?:\s*\d{1,2}%|)\s*[$:]?\s*([0-9\.\,]+)/i,
-    /IMPUESTO\s*(?:ADICIONAL|IVA)\s*[$:]?\s*([0-9\.\,]+)/i,
-  ]);
-
-  const total = grabLastNumber([
-    /TOTAL\s*(?:FACTURA|A\s*PAGAR|GENERAL|)\s*[$:]?\s*([0-9\.\,]+)/i,
-    /MONTO\s*TOTAL\s*[$:]?\s*([0-9\.\,]+)/i,
-  ]);
-
-  return { folio, proveedor, fechaEmision, neto, iva, total };
+  return {
+    folio,
+    proveedor,
+    fechaEmision,
+    neto: toNumberMoney(netoStr),
+    iva: toNumberMoney(ivaStr),
+    total: toNumberMoney(totalStr),
+  };
 }
