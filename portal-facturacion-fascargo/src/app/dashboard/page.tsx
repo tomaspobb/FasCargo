@@ -7,26 +7,30 @@ import Link from 'next/link';
 export default function DashboardPage() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuth, setIsAuth] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Verifica si el usuario está logueado y si es admin
   useEffect(() => {
     const userId = localStorage.getItem('userId');
+
+    // Si no hay sesión -> a login
     if (!userId) {
-      router.push('/login');
+      router.push('/auth/login'); // ← tu ruta real de login
       return;
     }
 
+    // Marcamos autenticado inmediatamente (para habilitar "Subir factura")
+    setIsAuth(true);
+
+    // Chequeo de admin (opcional, asíncrono)
     fetch(`/api/users?userId=${userId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data?.email === 'topoblete@alumnos.uai.cl') {
-          setIsAdmin(true);
-        }
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.email === 'topoblete@alumnos.uai.cl') setIsAdmin(true);
       })
       .catch(() => setIsAdmin(false))
       .finally(() => setLoading(false));
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (
@@ -48,7 +52,7 @@ export default function DashboardPage() {
           Accediste correctamente con doble autenticación. Ya puedes gestionar tu sesión y acceder a tus documentos.
         </p>
 
-        {/* Botón para ver facturas en PDF */}
+        {/* Ver facturas */}
         <div className="mb-3">
           <Link
             href="/facturas"
@@ -59,9 +63,8 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Solo para admin */}
-      {isAdmin && (
-        <>
+        {/* Subir factura: ahora para TODOS los autenticados */}
+        {isAuth && (
           <div className="mb-3">
             <Link
               href="/facturas/subir"
@@ -71,7 +74,10 @@ export default function DashboardPage() {
               Subir nueva factura en PDF
             </Link>
           </div>
+        )}
 
+        {/* Acciones solo admin */}
+        {isAdmin && (
           <div>
             <Link
               href="/users"
@@ -81,8 +87,7 @@ export default function DashboardPage() {
               Gestionar dispositivos conectados
             </Link>
           </div>
-        </>
-      )}
+        )}
       </div>
     </main>
   );
