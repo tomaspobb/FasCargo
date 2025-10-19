@@ -1,8 +1,7 @@
+// src/app/api/pdf/all/route.ts
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 import { NextResponse } from 'next/server';
-
-export const runtime = 'nodejs';
 
 export async function GET() {
   try {
@@ -14,21 +13,15 @@ export async function GET() {
       id: doc._id.toString(),
       title: doc.title,
       url: doc.url,
-      uploadedBy: doc.uploadedBy || null,
-
+      createdAt: doc.createdAt,
       estadoPago: doc.estadoPago,
       estadoSistema: doc.estadoSistema,
-
-      folio: doc.folio,
-      proveedor: doc.proveedor,
-      fechaEmision: doc.fechaEmision,
-      fechaPago: doc.fechaPago || null,
-      neto: doc.neto,
-      iva: doc.iva,
-      total: doc.total,
-
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
+      proveedor: doc.proveedor ?? null,
+      folio: doc.folio ?? null,
+      fechaEmision: doc.fechaEmision ?? null,
+      neto: typeof doc.neto === 'number' ? doc.neto : null,
+      iva: typeof doc.iva === 'number' ? doc.iva : null,
+      total: typeof doc.total === 'number' ? doc.total : null,
     }));
 
     return NextResponse.json(result);
