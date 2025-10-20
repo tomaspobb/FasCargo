@@ -13,20 +13,25 @@ export default function DashboardPage() {
   useEffect(() => {
     const userId = localStorage.getItem('userId');
 
-    // Si no hay sesión -> a login
+    // Si no hay sesión -> redirigir a login
     if (!userId) {
-      router.push('/auth/login'); // ← tu ruta real de login
+      router.push('/auth/login');
       return;
     }
 
-    // Marcamos autenticado inmediatamente (para habilitar botones)
+    // Usuario autenticado
     setIsAuth(true);
 
-    // Chequeo de admin (opcional, asíncrono)
+    // Verificar si el usuario es administrador
     fetch(`/api/users?userId=${userId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.email === 'topoblete@alumnos.uai.cl') setIsAdmin(true);
+        const adminEmails = [
+          'topoblete@alumnos.uai.cl',
+          'fascargo.chile.spa@gmail.com', // ✅ Nuevo correo admin
+        ];
+
+        if (adminEmails.includes(data?.email)) setIsAdmin(true);
       })
       .catch(() => setIsAdmin(false))
       .finally(() => setLoading(false));
@@ -45,7 +50,10 @@ export default function DashboardPage() {
       className="d-flex align-items-center justify-content-center"
       style={{ minHeight: '85vh', backgroundColor: '#f8f9fa' }}
     >
-      <div className="text-center p-5 shadow-lg bg-white rounded-4" style={{ maxWidth: '820px', width: '100%' }}>
+      <div
+        className="text-center p-5 shadow-lg bg-white rounded-4"
+        style={{ maxWidth: '820px', width: '100%' }}
+      >
         <h1 className="fw-bold text-primary mb-3">Bienvenido a tu panel</h1>
 
         <p className="lead text-muted mb-4">
@@ -54,6 +62,7 @@ export default function DashboardPage() {
 
         {/* Acciones principales */}
         <div className="row g-3 justify-content-center">
+          {/* Ver facturas */}
           <div className="col-sm-6 col-md-5">
             <Link
               href="/facturas"
@@ -64,6 +73,7 @@ export default function DashboardPage() {
             </Link>
           </div>
 
+          {/* Subir nueva factura */}
           {isAuth && (
             <div className="col-sm-6 col-md-5">
               <Link
@@ -76,7 +86,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* NUEVO: Gestión de facturas (cuentas + estados + exportar) */}
+          {/* Gestión de facturas */}
           {isAuth && (
             <div className="col-sm-6 col-md-5">
               <Link
@@ -89,7 +99,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Solo admin */}
+          {/* Opciones solo para administradores */}
           {isAdmin && (
             <div className="col-sm-6 col-md-5">
               <Link
@@ -103,7 +113,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Tips / atajos */}
+        {/* Tips / Atajos */}
         <div className="mt-4 text-muted small">
           <div>Tip: desde “Gestión de facturas” puedes editar estados y exportar a Excel.</div>
         </div>
