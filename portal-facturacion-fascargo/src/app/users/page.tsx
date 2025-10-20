@@ -1,109 +1,95 @@
-'use client'
+// src/app/users/page.tsx
+'use client';
 
-import { useEffect, useState } from 'react'
-import { Trash } from 'lucide-react'
+import { useEffect, useState } from 'react';
+import DeleteUserButton from '@/components/users/DeleteUserButton';
+import { isAdminEmail } from '@/constants/admins';
 
-interface UserInfo {
-  email: string
-  userId: string
-  lastLogin: string
-  updatedAt: string
-  createdAt: string
-}
+type UserRow = {
+  userId: string;
+  email: string;
+  createdAt?: string;
+  updatedAt?: string;
+  lastLoginAt?: string;
+};
 
-export default function UsersAdminPage() {
-  const [users, setUsers] = useState<UserInfo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-
-  const adminEmail = 'topoblete@alumnos.uai.cl'
+export default function UsersPage() {
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchUsers = async () => {
+    setLoading(true);
     try {
-      const res = await fetch(`/api/admin/devices?email=${adminEmail}`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setUsers(data.users)
-    } catch (err: any) {
-      setError(err.message)
+      const res = await fetch('/api/users'); // tu endpoint que retorna todos
+      const data = await res.json();
+      setUsers(data || []);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchUsers()
-  }, [])
-
-  const handleDelete = async (userId: string) => {
-    const confirmDelete = confirm('¿Estás seguro de que deseas eliminar este usuario?')
-    if (!confirmDelete) return
-
-    try {
-      const res = await fetch(`/api/admin/users?email=${adminEmail}&userId=${userId}`, {
-        method: 'DELETE'
-      })
-      const data = await res.json()
-
-      if (!res.ok) throw new Error(data.error || 'Error al eliminar usuario')
-
-      setUsers(prev => prev.filter(u => u.userId !== userId))
-      setSuccess('Usuario eliminado correctamente')
-      setTimeout(() => setSuccess(''), 3000)
-    } catch (err: any) {
-      setError(err.message)
-      setTimeout(() => setError(''), 3000)
-    }
-  }
+    fetchUsers();
+  }, []);
 
   return (
-    <div className="container mt-5">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="fw-bold text-primary">👥 Usuarios Registrados</h1>
+    <div className="container py-4">
+      <div className="d-flex align-items-center gap-2 mb-4">
+        <i className="bi bi-people-fill fs-3 text-primary" />
+        <h2 className="m-0 fw-bold text-primary">Usuarios Registrados</h2>
       </div>
 
-      {loading ? (
-        <div className="text-center">
-          <div className="spinner-border text-primary" role="status"></div>
-          <p className="mt-2">Cargando datos...</p>
-        </div>
-      ) : (
-        <>
-          {error && (
-            <div className="alert alert-danger text-center">{error}</div>
-          )}
-          {success && (
-            <div className="alert alert-success text-center">{success}</div>
-          )}
+      {loading && <div className="alert alert-info">Cargando usuarios…</div>}
 
-          <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-            {users.map((user) => (
-              <div key={user.userId} className="col">
-                <div className="card border-0 shadow-sm h-100">
-                  <div className="card-body">
-                    <h5 className="card-title mb-2 text-primary fw-semibold">{user.email}</h5>
-                    <p className="mb-1"><strong>ID:</strong> <span className="text-muted">{user.userId}</span></p>
-                    <p className="mb-1"><strong>Último login:</strong> {new Date(user.lastLogin).toLocaleString()}</p>
-                    <p className="mb-1"><strong>Creado:</strong> {new Date(user.createdAt).toLocaleString()}</p>
-                    <p className="mb-3"><strong>Actualizado:</strong> {new Date(user.updatedAt).toLocaleString()}</p>
+      <div className="row g-4">
+        {users.map((u) => {
+          const admin = isAdminEmail(u.email);
 
-                    {user.email !== adminEmail && (
-                      <button
-                        className="btn btn-sm btn-outline-danger d-flex align-items-center gap-2"
-                        onClick={() => handleDelete(user.userId)}
-                      >
-                        <Trash size={16} />
-                        Eliminar Usuario
-                      </button>
+          return (
+            <div key={u.userId} className="col-lg-4 col-md-6">
+              <div className="card shadow-sm border-0 rounded-4 h-100">
+                <div className="card-body d-flex flex-column">
+                  <div className="d-flex align-items-start justify-content-between mb-2">
+                    <a href={`mailto:${u.email}`} className="fw-bold fs-5 text-decoration-none">
+                      {u.email}
+                    </a>
+                    {admin ? (
+                      <span className="badge rounded-pill bg-primary-subtle text-primary fw-semibold">
+                        Admin
+                      </span>
+                    ) : (
+                      <span className="badge rounded-pill bg-secondary-subtle text-secondary">
+                        Usuario
+                      </span>
                     )}
+                  </div>
+
+                  <div className="text-muted small mb-3">
+                    <div><strong>ID:</strong> {u.userId}</div>
+                    {u.lastLoginAt && <div><strong>Último login:</strong> {new Date(u.lastLoginAt).toLocaleString()}</div>}
+                    {u.createdAt && <div><strong>Creado:</strong> {new Date(u.createdAt).toLocaleString()}</div>}
+                    {u.updatedAt && <div><strong>Actualizado:</strong> {new Date(u.updatedAt).toLocaleString()}</div>}
+                  </div>
+
+                  <div className="mt-auto d-flex justify-content-start">
+                    <DeleteUserButton
+                      userId={u.userId}
+                      email={u.email}
+                      onDeleted={fetchUsers}
+                    />
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
+          );
+        })}
+
+        {!loading && users.length === 0 && (
+          <div className="col-12">
+            <div className="alert alert-secondary">No hay usuarios registrados.</div>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
-  )
+  );
 }
