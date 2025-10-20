@@ -33,7 +33,18 @@ export default function GestionFacturasPage() {
     })();
   }, []);
 
-  // Cuenta por nombre de factura (title)
+  // ===== KPIs (memo) =====
+  const kpi = useMemo(() => {
+    const totalDocs = items.length;
+    const totalMonto = items.reduce((acc, it) => acc + (typeof it.total === 'number' ? it.total : 0), 0);
+    const pagadas    = items.filter((d) => d.estadoPago === 'pagada').length;
+    const pendientes = items.filter((d) => d.estadoPago === 'pendiente').length;
+    const vencidas   = items.filter((d) => d.estadoPago === 'vencida').length;
+    const anuladas   = items.filter((d) => d.estadoPago === 'anulada').length;
+    return { totalDocs, totalMonto, pagadas, pendientes, vencidas, anuladas };
+  }, [items]);
+
+  // ===== Cuenta por nombre de factura (title) =====
   const resumen = useMemo(() => {
     const map = new Map<string, { count: number; total: number }>();
     for (const it of items) {
@@ -79,8 +90,7 @@ export default function GestionFacturasPage() {
 
       const wbout = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
       const blob = new Blob([wbout], {
-        type:
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -126,7 +136,47 @@ export default function GestionFacturasPage() {
       {error && <div className="alert alert-danger">{error}</div>}
       {loading && <div className="alert alert-info">Cargando…</div>}
 
-      {/* Cuenta de facturas */}
+      {/* ===== KPIs ===== */}
+      <div className="row g-3 mb-4">
+        <div className="col-6 col-md-2">
+          <div className="p-3 rounded-4 bg-white border">
+            <div className="text-muted small">Facturas</div>
+            <div className="fs-4 fw-bold">{kpi.totalDocs}</div>
+          </div>
+        </div>
+        <div className="col-6 col-md-3">
+          <div className="p-3 rounded-4 bg-white border">
+            <div className="text-muted small">Monto total</div>
+            <div className="fs-5 fw-bold">CLP {kpi.totalMonto.toLocaleString()}</div>
+          </div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="p-3 rounded-4 bg-white border">
+            <div className="text-muted small">Pagadas</div>
+            <div className="fs-4 fw-bold text-success">{kpi.pagadas}</div>
+          </div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="p-3 rounded-4 bg-white border">
+            <div className="text-muted small">Pendientes</div>
+            <div className="fs-4 fw-bold text-warning">{kpi.pendientes}</div>
+          </div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="p-3 rounded-4 bg-white border">
+            <div className="text-muted small">Vencidas</div>
+            <div className="fs-4 fw-bold text-danger">{kpi.vencidas}</div>
+          </div>
+        </div>
+        <div className="col-6 col-md-1">
+          <div className="p-3 rounded-4 bg-white border">
+            <div className="text-muted small">Anuladas</div>
+            <div className="fs-5 fw-bold">{kpi.anuladas}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Cuenta de facturas (por nombre/título) ===== */}
       <div className="bg-white p-4 rounded-4 shadow-sm mb-4">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h4 className="m-0">📊 Cuenta de facturas (por nombre/título)</h4>
@@ -149,12 +199,17 @@ export default function GestionFacturasPage() {
                   <td className="text-end">{r.total.toLocaleString()}</td>
                 </tr>
               ))}
+              {resumen.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="text-center text-muted py-3">Sin datos</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Estado de facturas (editable) */}
+      {/* ===== Estado de facturas (editable) ===== */}
       <div className="bg-white p-4 rounded-4 shadow-sm">
         <h4 className="mb-3">🛠️ Estado de facturas</h4>
         <div className="table-responsive">
@@ -166,7 +221,7 @@ export default function GestionFacturasPage() {
                 <th>Folio</th>
                 <th className="text-end">Total</th>
                 <th>Estado</th>
-                <th className="text-nowrap">Actualizado</th>
+                <th className="text-nowrap">Creado</th>
               </tr>
             </thead>
             <tbody>
@@ -193,6 +248,11 @@ export default function GestionFacturasPage() {
                   <td>{new Date(it.createdAt).toLocaleDateString()}</td>
                 </tr>
               ))}
+              {items.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={6} className="text-center text-muted py-3">No hay facturas</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

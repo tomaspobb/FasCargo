@@ -4,16 +4,19 @@ import { Pdf } from '@/models/Pdf';
 import { del } from '@vercel/blob';
 import { NextResponse } from 'next/server';
 
-export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+// ✅ PATCH: actualizar estadoPago y/o título
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
     await connectToDatabase();
-    const { id } = await context.params;
+    const { id } = params;
     const body = await req.json().catch(() => ({}));
 
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
 
     const update: any = {};
-    if (typeof body.title === 'string' && body.title.trim()) update.title = body.title.trim();
+    if (typeof body.title === 'string' && body.title.trim()) {
+      update.title = body.title.trim();
+    }
     if (typeof body.estadoPago === 'string') {
       const ok = ['pagada', 'pendiente', 'anulada', 'vencida'];
       if (!ok.includes(body.estadoPago)) {
@@ -50,4 +53,28 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   }
 }
 
-// (tu DELETE queda igual aquí debajo)
+// ✅ DELETE: elimina documento y su blob asociado
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  try {
+    await connectToDatabase();
+    const { id } = params;
+
+    if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
+
+    const deleted = await Pdf.findByIdAndDelete(id);
+    if (!deleted) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
+
+    // Intenta borrar el blob (si existe)
+    try {
+      const blobPath = new URL(deleted.url).pathname.slice(1); // sin "/"
+      await del(blobPath);
+    } catch (err) {
+      console.warn('⚠️ No se pudo eliminar el blob (puede que ya no exista):', err);
+    }
+
+    return NextResponse.json({ message: 'Factura eliminada correctamente' });
+  } catch (err) {
+    console.error('❌ Error al eliminar PDF o Blob:', err);
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+  }
+}
