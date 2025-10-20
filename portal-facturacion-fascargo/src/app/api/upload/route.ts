@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     const blob = await put(objectName, arrayBuffer, {
       access: 'public',
       contentType: 'application/pdf',
-      contentDisposition: `inline; filename="${safe}.pdf"`,
+      addRandomSuffix: false, // opcional, mantiene nombre limpio
       cacheControlMaxAge: 60 * 60 * 24 * 365,
     });
 
