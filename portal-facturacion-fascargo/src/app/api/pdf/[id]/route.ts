@@ -4,11 +4,13 @@ import { Pdf } from '@/models/Pdf';
 import { del } from '@vercel/blob';
 import { NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+
 // ✅ PATCH: actualizar estadoPago y/o título
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: any) {
   try {
     await connectToDatabase();
-    const { id } = params;
+    const id = params?.id as string | undefined;
     const body = await req.json().catch(() => ({}));
 
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
@@ -54,10 +56,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 // ✅ DELETE: elimina documento y su blob asociado
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: any) {
   try {
     await connectToDatabase();
-    const { id } = params;
+    const id = params?.id as string | undefined;
 
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
 
