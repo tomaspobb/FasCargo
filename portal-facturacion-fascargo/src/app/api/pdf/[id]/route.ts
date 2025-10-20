@@ -55,13 +55,19 @@ export async function PATCH(req: Request, { params }: any) {
   }
 }
 
-// ✅ DELETE: elimina documento y su blob asociado
+// ✅ DELETE: elimina documento y su blob asociado (solo ADMIN)
 export async function DELETE(req: Request, { params }: any) {
   try {
     await connectToDatabase();
     const id = params?.id as string | undefined;
-
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
+
+    // 🔐 Autorización por correo (cabecera enviada desde el cliente)
+    const adminEmails = ['topoblete@alumnos.uai.cl', 'fascargo.chile.spa@gmail.com'];
+    const requester = (req.headers.get('x-user-email') || '').trim().toLowerCase();
+    if (!adminEmails.includes(requester)) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    }
 
     const deleted = await Pdf.findByIdAndDelete(id);
     if (!deleted) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
