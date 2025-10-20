@@ -2,13 +2,12 @@
 
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import { toast } from 'react-toastify';
 import { useState } from 'react';
 
 export function DeletePdfButton({ id }: { id: string }) {
   const { email } = useAuth();
   const router = useRouter();
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const ADMIN_EMAILS = [
@@ -18,10 +17,7 @@ export function DeletePdfButton({ id }: { id: string }) {
 
   const handleDelete = async () => {
     if (!confirm('¿Estás seguro de que deseas eliminar esta factura?')) return;
-
     setDeleting(true);
-    setError(null);
-    setMessage(null);
 
     try {
       const res = await fetch(`/api/pdf/${id}`, {
@@ -35,49 +31,28 @@ export function DeletePdfButton({ id }: { id: string }) {
       const data = await res.json();
 
       if (res.ok) {
-        setMessage('✅ Factura eliminada correctamente');
-        setTimeout(() => router.push('/facturas'), 1500);
+        toast.success('✅ Factura eliminada correctamente');
+        setTimeout(() => router.push('/facturas'), 2000);
       } else {
-        setError(`❌ ${data.error || 'Error al eliminar la factura'}`);
+        toast.error(`❌ ${data.error || 'Error al eliminar la factura'}`);
       }
-    } catch (err) {
-      setError('❌ Error al conectar con el servidor');
+    } catch {
+      toast.error('❌ Error de conexión con el servidor');
     } finally {
       setDeleting(false);
     }
   };
 
-  // Solo mostrar el botón si es admin
+  // Mostrar solo si el usuario es admin
   if (!email || !ADMIN_EMAILS.includes(email)) return null;
 
   return (
-    <div className="mt-4">
-      <button
-        onClick={handleDelete}
-        disabled={deleting}
-        className="btn btn-danger rounded-pill px-4 fw-semibold"
-      >
-        {deleting ? 'Eliminando...' : '🗑️ Eliminar factura'}
-      </button>
-
-      {/* ✅ Toasts de feedback */}
-      {message && (
-        <div
-          className="alert alert-success mt-3 rounded-3 shadow-sm py-2 px-3 text-center"
-          role="alert"
-        >
-          {message}
-        </div>
-      )}
-
-      {error && (
-        <div
-          className="alert alert-danger mt-3 rounded-3 shadow-sm py-2 px-3 text-center"
-          role="alert"
-        >
-          {error}
-        </div>
-      )}
-    </div>
+    <button
+      onClick={handleDelete}
+      disabled={deleting}
+      className="btn btn-danger rounded-pill px-4 fw-semibold mt-3"
+    >
+      {deleting ? 'Eliminando...' : '🗑️ Eliminar factura'}
+    </button>
   );
 }
