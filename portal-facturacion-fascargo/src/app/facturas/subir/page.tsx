@@ -43,14 +43,17 @@ function toDateMaybe(s?: string): string | undefined {
 
 async function extractInBrowser(file: File) {
   const buf = await file.arrayBuffer();
-  const loadingTask = getDocument({ data: buf,  isEvalSupported: false });
+  const loadingTask = getDocument({ data: buf, isEvalSupported: false });
   const pdf = await loadingTask.promise;
 
   let text = '';
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
-    const content = await page.getTextContent({ normalizeWhitespace: true });
-    text += (content.items as any[]).map((it) => it.str || '').join('\n') + '\n';
+    // ✅ sin opciones; normalizamos nosotros
+    const content = await page.getTextContent();
+    text += (content.items as any[])
+      .map((it) => (typeof (it as any).str === 'string' ? (it as any).str : ''))
+      .join('\n') + '\n';
   }
   text = normalizeSpaces(text);
 
@@ -96,9 +99,19 @@ async function extractInBrowser(file: File) {
     ]);
   const fechaEmision = toDateMaybe(fechaStr);
 
-  const neto = matchLastNum([/MONTO\s+NETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bNETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bSUBTOTAL\s*[$:]?\s*([0-9\.\,]+)/i]);
-  const iva  = matchLastNum([/I\.?V\.?A\.?(?:\s*\d{1,2}%|)\s*[$:]?\s*([0-9\.\,]+)/i, /IMPUESTO\s*(?:ADICIONAL|IVA)\s*[$:]?\s*([0-9\.\,]+)/i]);
-  const total= matchLastNum([/TOTAL\s*(?:FACTURA|A\s*PAGAR|GENERAL|)\s*[$:]?\s*([0-9\.\,]+)/i, /MONTO\s*TOTAL\s*[$:]?\s*([0-9\.\,]+)/i]);
+  const neto = matchLastNum([
+    /MONTO\s+NETO\s*[$:]?\s*([0-9\.\,]+)/i,
+    /\bNETO\s*[$:]?\s*([0-9\.\,]+)/i,
+    /\bSUBTOTAL\s*[$:]?\s*([0-9\.\,]+)/i
+  ]);
+  const iva  = matchLastNum([
+    /I\.?V\.?A\.?(?:\s*\d{1,2}%|)\s*[$:]?\s*([0-9\.\,]+)/i,
+    /IMPUESTO\s*(?:ADICIONAL|IVA)\s*[$:]?\s*([0-9\.\,]+)/i
+  ]);
+  const total= matchLastNum([
+    /TOTAL\s*(?:FACTURA|A\s*PAGAR|GENERAL|)\s*[$:]?\s*([0-9\.\,]+)/i,
+    /MONTO\s*TOTAL\s*[$:]?\s*([0-9\.\,]+)/i
+  ]);
 
   return { proveedor, folio, fechaEmision, neto, iva, total };
 }
