@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useState, useRef } from 'react';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 
-// usa un worker público para evitar bundling pesado
+// Worker de pdf.js
 GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -49,7 +48,6 @@ async function extractInBrowser(file: File) {
   let text = '';
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
-    // ✅ sin opciones; normalizamos nosotros
     const content = await page.getTextContent();
     text += (content.items as any[])
       .map((it) => (typeof (it as any).str === 'string' ? (it as any).str : ''))
@@ -77,41 +75,28 @@ async function extractInBrowser(file: File) {
     return undefined;
   };
 
-  const proveedor =
-    matchOne([
-      /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+R\.?U\.?T\.?/i,
-      /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+FACTURA\s+ELECTRONICA/i,
-      /(?:raz[oó]n\s+social|emisor|proveedor)\s*[:\-]\s*([^\n]+)/i,
-    ]) || undefined;
+  const proveedor = matchOne([
+    /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+R\.?U\.?T\.?/i,
+    /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+FACTURA\s+ELECTRONICA/i,
+    /(?:raz[oó]n\s+social|emisor|proveedor)\s*[:\-]\s*([^\n]+)/i,
+  ]) || undefined;
 
-  const folio =
-    matchOne([
-      /FACTURA\s+ELECTRONICA\s*(?:N[°º#]\s*|No\.?\s*)?([0-9]{1,10})/i,
-      /\bN[°º#]\s*([0-9]{1,10})\b/i,
-      /\bNo\.?\s*([0-9]{1,10})\b/i,
-    ]) || undefined;
+  const folio = matchOne([
+    /FACTURA\s+ELECTRONICA\s*(?:N[°º#]\s*|No\.?\s*)?([0-9]{1,10})/i,
+    /\bN[°º#]\s*([0-9]{1,10})\b/i,
+    /\bNo\.?\s*([0-9]{1,10})\b/i,
+  ]) || undefined;
 
-  const fechaStr =
-    matchOne([
-      /Fecha\s*Emisi[oó]n\s*[:\-]\s*([^\n]+)/i,
-      /\bEmisi[oó]n\s*[:\-]\s*([^\n]+)/i,
-      /Fecha\s*[:\-]\s*([^\n]+)/i,
-    ]);
+  const fechaStr = matchOne([
+    /Fecha\s*Emisi[oó]n\s*[:\-]\s*([^\n]+)/i,
+    /\bEmisi[oó]n\s*[:\-]\s*([^\n]+)/i,
+    /Fecha\s*[:\-]\s*([^\n]+)/i,
+  ]);
   const fechaEmision = toDateMaybe(fechaStr);
 
-  const neto = matchLastNum([
-    /MONTO\s+NETO\s*[$:]?\s*([0-9\.\,]+)/i,
-    /\bNETO\s*[$:]?\s*([0-9\.\,]+)/i,
-    /\bSUBTOTAL\s*[$:]?\s*([0-9\.\,]+)/i
-  ]);
-  const iva  = matchLastNum([
-    /I\.?V\.?A\.?(?:\s*\d{1,2}%|)\s*[$:]?\s*([0-9\.\,]+)/i,
-    /IMPUESTO\s*(?:ADICIONAL|IVA)\s*[$:]?\s*([0-9\.\,]+)/i
-  ]);
-  const total= matchLastNum([
-    /TOTAL\s*(?:FACTURA|A\s*PAGAR|GENERAL|)\s*[$:]?\s*([0-9\.\,]+)/i,
-    /MONTO\s*TOTAL\s*[$:]?\s*([0-9\.\,]+)/i
-  ]);
+  const neto  = matchLastNum([/MONTO\s+NETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bNETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bSUBTOTAL\s*[$:]?\s*([0-9\.\,]+)/i]);
+  const iva   = matchLastNum([/I\.?V\.?A\.?(?:\s*\d{1,2}%|)\s*[$:]?\s*([0-9\.\,]+)/i, /IMPUESTO\s*(?:ADICIONAL|IVA)\s*[$:]?\s*([0-9\.\,]+)/i]);
+  const total = matchLastNum([/TOTAL\s*(?:FACTURA|A\s*PAGAR|GENERAL|)\s*[$:]?\s*([0-9\.\,]+)/i, /MONTO\s*TOTAL\s*[$:]?\s*([0-9\.\,]+)/i]);
 
   return { proveedor, folio, fechaEmision, neto, iva, total };
 }
@@ -119,141 +104,167 @@ async function extractInBrowser(file: File) {
 export default function PdfUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
+  const [meta, setMeta] = useState<any>(null);
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (f) await onPickFile(f);
+  };
+  const onPickFile = async (f: File) => {
+    if (f.type && f.type !== 'application/pdf' && !f.name.endsWith('.pdf')) {
+      setError('Solo se permiten archivos PDF.');
+      return;
+    }
+    setError(null);
+    setFile(f);
+    setMeta(null);
+    try {
+      const m = await extractInBrowser(f);
+      setMeta(m);
+      if (!name.trim()) setName(f.name.replace(/\.pdf$/i, ''));
+    } catch (err: any) {
+      console.error(err);
+      setMeta(null);
+      setError('No se pudo leer el PDF en el navegador.');
+    }
+  };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
     if (!file) return setError('Selecciona un archivo PDF antes de continuar.');
-    if (file.type && file.type !== 'application/pdf' && !file.name.endsWith('.pdf'))
-      return setError('Solo se permiten archivos PDF.');
     if (!name.trim()) return setError('Debes ingresar un título para la factura.');
 
     setLoading(true);
-
+    setProgress(15);
     try {
-      // ⬇️ 1) extraer en el navegador
-      const meta = await extractInBrowser(file);
-
-      // ⬇️ 2) enviar archivo + metadatos al backend
       const formData = new FormData();
       formData.append('file', file);
       formData.append('name', name.trim());
-      if (meta.proveedor) formData.append('proveedor', meta.proveedor);
-      if (meta.folio) formData.append('folio', meta.folio);
-      if (meta.fechaEmision) formData.append('fechaEmision', meta.fechaEmision);
-      if (typeof meta.neto === 'number') formData.append('neto', String(meta.neto));
-      if (typeof meta.iva === 'number') formData.append('iva', String(meta.iva));
-      if (typeof meta.total === 'number') formData.append('total', String(meta.total));
+      if (meta?.proveedor) formData.append('proveedor', meta.proveedor);
+      if (meta?.folio) formData.append('folio', meta.folio);
+      if (meta?.fechaEmision) formData.append('fechaEmision', meta.fechaEmision);
+      if (typeof meta?.neto === 'number') formData.append('neto', String(meta.neto));
+      if (typeof meta?.iva === 'number') formData.append('iva', String(meta.iva));
+      if (typeof meta?.total === 'number') formData.append('total', String(meta.total));
 
+      setProgress(45);
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      setProgress(85);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al subir el archivo');
 
       setResponse(data);
-      setFile(null);
-      setName('');
+      setProgress(100);
     } catch (err: any) {
       console.error('Upload error:', err);
       setError(err.message || 'Error al subir el archivo');
+      setProgress(0);
     } finally {
       setLoading(false);
     }
   };
-  
-  return (
-    <div className="container mt-5">
-      <div className="bg-white p-5 rounded-4 shadow-sm">
-        <h2 className="text-primary fw-bold mb-4">📤 Subir nueva factura PDF</h2>
 
-        <form onSubmit={handleUpload}>
-          <div className="mb-3">
+  return (
+    <div className="container py-4">
+      <h2 className="fw-bold text-primary mb-3">📤 Subir nueva factura PDF</h2>
+
+      <div className="bg-white p-4 rounded-4 shadow-sm">
+        {/* Dropzone */}
+        <div
+          ref={dropRef}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+          className="border border-2 border-dashed rounded-4 p-4 text-center mb-3"
+          style={{ borderStyle: 'dashed' }}
+        >
+          <div className="mb-2">
+            <i className="bi bi-cloud-arrow-up fs-1 text-primary" />
+          </div>
+          <div className="mb-2">Arrastra un PDF aquí, o selecciónalo manualmente.</div>
+          <label className="btn btn-outline-primary rounded-pill px-4">
+            Seleccionar archivo
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => e.target.files?.[0] && onPickFile(e.target.files[0])}
+              hidden
+            />
+          </label>
+          {file && (
+            <div className="mt-2 small text-muted">
+              Archivo seleccionado: <strong>{file.name}</strong> ({Math.round(file.size / 1024)} KB)
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleUpload} className="row g-3">
+          <div className="col-md-6">
             <label className="form-label fw-semibold">Título de la factura</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="form-control"
-              placeholder="Ej: Factura Julio 2025"
+              placeholder="Ej: Transporte Leis Alejandro (Sep 2025)"
               disabled={loading}
               required
             />
           </div>
 
-          <div className="mb-3">
-            <label className="form-label fw-semibold">Selecciona un archivo PDF</label>
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="form-control"
-              disabled={loading}
-              required
-            />
+        {/* Metadatos */}
+          <div className="col-12">
+            <div className="bg-light rounded-3 p-3">
+              <div className="fw-semibold mb-2">Metadatos detectados:</div>
+              <div className="row g-2 small">
+                <div className="col-sm-4"><strong>Proveedor:</strong> {meta?.proveedor || '—'}</div>
+                <div className="col-sm-4"><strong>Folio:</strong> {meta?.folio || '—'}</div>
+                <div className="col-sm-4"><strong>Emisión:</strong> {meta?.fechaEmision ? new Date(meta.fechaEmision).toLocaleDateString() : '—'}</div>
+                <div className="col-sm-4"><strong>Neto:</strong> {typeof meta?.neto === 'number' ? meta.neto.toLocaleString() : '—'}</div>
+                <div className="col-sm-4"><strong>IVA:</strong> {typeof meta?.iva === 'number' ? meta.iva.toLocaleString() : '—'}</div>
+                <div className="col-sm-4"><strong>Total:</strong> {typeof meta?.total === 'number' ? meta.total.toLocaleString() : '—'}</div>
+              </div>
+            </div>
           </div>
 
-          {error && <div className="alert alert-danger rounded-3">{error}</div>}
+          {error && <div className="col-12"><div className="alert alert-danger rounded-3">{error}</div></div>}
 
-          <button
-            type="submit"
-            className="btn btn-primary rounded-pill px-4 mt-2"
-            disabled={loading}
-          >
-            {loading ? 'Subiendo...' : 'Subir PDF'}
-          </button>
+          {loading && (
+            <div className="col-12">
+              <div className="progress" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
+                <div className="progress-bar" style={{ width: `${progress}%` }}>{progress}%</div>
+              </div>
+            </div>
+          )}
+
+          <div className="col-12">
+            <button type="submit" className="btn btn-primary rounded-pill px-4" disabled={loading || !file}>
+              {loading ? 'Subiendo…' : 'Subir PDF'}
+            </button>
+          </div>
         </form>
 
-        {response && response.url && (
-          <div className="mt-5">
-            <div className="alert alert-success rounded-4 p-4 shadow-sm">
-              <h5 className="fw-bold">✅ PDF subido correctamente</h5>
-              <p><strong>Título:</strong> {response.title}</p>
-              <p><strong>Subido el:</strong> {new Date(response.createdAt).toLocaleString()}</p>
-              <a
-                href={response.url}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-outline-primary rounded-pill"
-              >
-                Ver PDF
-              </a>
+        {response?.url && (
+          <div className="mt-4">
+            <div className="alert alert-success rounded-4 p-3 shadow-sm">
+              <h6 className="fw-bold mb-1">✅ PDF subido correctamente</h6>
+              <div className="small">
+                <div><strong>Título:</strong> {response.title}</div>
+                <div><strong>Subido el:</strong> {new Date(response.createdAt).toLocaleString()}</div>
+              </div>
             </div>
-
             <iframe
               src={response.url}
               width="100%"
-              height="500px"
-              style={{
-                border: '1px solid #ccc',
-                borderRadius: '12px',
-                marginTop: '20px',
-              }}
-              title="PDF Subido"
+              height="480"
+              style={{ border: '1px solid #ddd', borderRadius: 12 }}
             />
-
-            <div className="d-flex gap-3 mt-4">
-              <Link
-                href="/dashboard"
-                className="btn btn-success rounded-pill px-4 fw-semibold"
-              >
-                Ir al Dashboard
-              </Link>
-
-              <button
-                onClick={() => {
-                  setResponse(null);
-                  setFile(null);
-                  setName('');
-                  setError(null);
-                }}
-                className="btn btn-secondary rounded-pill px-4"
-              >
-                Subir otro PDF
-              </button>
-            </div>
           </div>
         )}
       </div>

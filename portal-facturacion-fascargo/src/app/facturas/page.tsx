@@ -1,149 +1,123 @@
+// src/app/facturas/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { FaFilePdf, FaCheckCircle, FaTimesCircle, FaClock } from 'react-icons/fa';
 import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { CLP, InvoiceDTO, groupKey, slugify } from '@/lib/utils';
 
-interface Invoice {
-  id: string;
-  url: string;
-  createdAt: string;
-  title?: string;
-  // nuevos/campo reales:
-  proveedor?: string;
-  folio?: string;
-  total?: number;
-  estadoPago: 'pagada' | 'pendiente' | 'anulada' | 'vencida';
-  estadoSistema: 'uploaded' | 'parsed' | 'validated' | 'rejected';
-}
+type Folder = {
+  name: string;
+  slug: string;
+  count: number;
+  total: number;
+  lastDate: number;
+};
 
-export default function FacturasPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [filtered, setFiltered] = useState<Invoice[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>('Todas');
-  const [dateOrder, setDateOrder] = useState<string>('Recientes');
+export default function FacturasFoldersPage() {
+  const [all, setAll] = useState<InvoiceDTO[]>([]);
+  const [q, setQ] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const userId = localStorage.getItem('userId');
-    const verified = localStorage.getItem('sessionVerified') === 'true';
-    setIsLoggedIn(!!userId && verified);
+    (async () => {
+      try {
+        const res = await fetch('/api/pdf/all', { cache: 'no-store' });
+        const data = await res.json();
+        setAll(data || []);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  useEffect(() => {
-    if (isLoggedIn) {
-      fetch('/api/pdf/all')
-        .then((res) => res.json())
-        .then((data) => {
-          // Ya no inventamos estado; usamos el real de Mongo
-          setInvoices(data);
-        });
+  const folders = useMemo<Folder[]>(() => {
+    const map = new Map<string, Folder>();
+    for (const inv of all) {
+      const name = groupKey(inv);
+      const f = map.get(name) ?? {
+        name,
+        slug: slugify(name),
+        count: 0,
+        total: 0,
+        lastDate: 0,
+      };
+      f.count += 1;
+      f.total += inv.total || 0;
+      f.lastDate = Math.max(f.lastDate, new Date(inv.createdAt).getTime());
+      map.set(name, f);
     }
-  }, [isLoggedIn]);
-
-  useEffect(() => {
-    let result = [...invoices];
-
-    if (statusFilter !== 'Todas') {
-      result = result.filter((f) => f.estadoPago === statusFilter.toLowerCase());
+    let arr = Array.from(map.values());
+    if (q.trim()) {
+      const s = q.toLowerCase();
+      arr = arr.filter((f) => f.name.toLowerCase().includes(s));
     }
-
-    result.sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return dateOrder === 'Antiguas' ? dateA - dateB : dateB - dateA;
-    });
-
-    setFiltered(result);
-  }, [statusFilter, dateOrder, invoices]);
-
-  if (!isLoggedIn) {
-    return (
-      <div className="container py-5 text-center">
-        <h2 className="text-danger">Acceso restringido</h2>
-        <p>Debes iniciar sesión y completar la verificación en dos pasos para acceder a esta página.</p>
-      </div>
-    );
-  }
-
-  const badge = (estado: Invoice['estadoPago']) => {
-    if (estado === 'pagada') return { cls: 'bg-success', icon: <FaCheckCircle className="me-1" /> };
-    if (estado === 'pendiente') return { cls: 'bg-warning text-dark', icon: <FaClock className="me-1" /> };
-    if (estado === 'vencida') return { cls: 'bg-danger', icon: <FaTimesCircle className="me-1" /> };
-    return { cls: 'bg-secondary', icon: null }; // anulada u otros
-  };
+    // más recientes arriba
+    arr.sort((a, b) => b.lastDate - a.lastDate);
+    return arr;
+  }, [all, q]);
 
   return (
-    <div className="container py-5">
-      <h2 className="text-primary fw-bold mb-4">📄 Tus Facturas</h2>
-
-      {/* Filtros */}
-      <div className="row g-3 mb-4">
-        <div className="col-md-6">
-          <label className="form-label fw-semibold">Filtrar por estado de pago:</label>
-          <select
-            className="form-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="Todas">Todas</option>
-            <option value="pagada">Pagadas</option>
-            <option value="pendiente">Pendientes</option>
-            <option value="vencida">Vencidas</option>
-            <option value="anulada">Anuladas</option>
-          </select>
+    <div className="container py-4">
+      <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div className="d-flex align-items-center gap-2">
+          <i className="bi bi-folder2-open fs-3 text-primary"></i>
+          <h2 className="m-0 fw-bold text-primary">Carpetas</h2>
         </div>
-        <div className="col-md-6">
-          <label className="form-label fw-semibold">Ordenar por fecha:</label>
-          <select
-            className="form-select"
-            value={dateOrder}
-            onChange={(e) => setDateOrder(e.target.value)}
-          >
-            <option value="Recientes">Más recientes primero</option>
-            <option value="Antiguas">Más antiguas primero</option>
-          </select>
+
+        <Link href="/facturas/subir" className="btn btn-primary rounded-pill">
+          <i className="bi bi-upload me-1" />
+          Subir nueva factura
+        </Link>
+      </div>
+
+      <div className="row g-3 mb-3">
+        <div className="col-md-6 col-lg-5">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="form-control"
+            placeholder="Buscar carpeta por nombre…"
+          />
         </div>
       </div>
 
-      {/* Tarjetas */}
+      {loading && <div className="alert alert-info">Cargando facturas…</div>}
+
       <div className="row g-4">
-        {filtered.map((f) => {
-          const nombreArchivo = f.url.split('/').pop() || 'Sin nombre';
-          const fecha = new Date(f.createdAt).toLocaleDateString();
-          const b = badge(f.estadoPago);
+        {folders.map((f) => (
+          <div key={f.slug} className="col-lg-4 col-md-6">
+            <div className="card border-0 rounded-4 shadow-sm h-100">
+              <div className="card-body d-flex flex-column">
+                <div className="d-flex align-items-start justify-content-between">
+                  <h5 className="card-title fw-semibold mb-2">{f.name}</h5>
+                  <span className="badge bg-primary-subtle text-primary rounded-pill">
+                    {f.count} {f.count === 1 ? 'factura' : 'facturas'}
+                  </span>
+                </div>
 
-          return (
-            <div className="col-md-6 col-lg-4" key={f.id}>
-              <div className="card shadow-sm h-100 border-0 rounded-4">
-                <div className="card-body">
-                  <h5 className="card-title fw-semibold mb-1">{f.title?.trim() || nombreArchivo}</h5>
-                  <p className="text-muted mb-2">Subida: {fecha}</p>
+                <div className="text-muted small mb-3">
+                  <div><strong>Total acumulado:</strong> {CLP(f.total)}</div>
+                  <div><strong>Última carga:</strong> {f.lastDate ? new Date(f.lastDate).toLocaleDateString() : '—'}</div>
+                </div>
 
-                  {f.proveedor && <p className="mb-1"><strong>Proveedor:</strong> {f.proveedor}</p>}
-                  {f.folio && <p className="mb-1"><strong>Folio:</strong> {f.folio}</p>}
-                  {typeof f.total === 'number' && (
-                    <p className="mb-1"><strong>Total:</strong> CLP {f.total.toLocaleString()}</p>
-                  )}
-
-                  <div className="d-flex align-items-center gap-2 mt-2">
-                    <span className={`badge px-3 py-1 rounded-pill ${b.cls}`}>
-                      {b.icon}{f.estadoPago.toUpperCase()}
-                    </span>
-                    <span className="badge px-3 py-1 rounded-pill bg-light text-muted border">
-                      {f.estadoSistema.toUpperCase()}
-                    </span>
-                  </div>
-
-                  <hr />
-                  <Link href={`/facturas/${f.id}`} className="btn btn-outline-primary w-100 rounded-pill mt-1">
-                    <FaFilePdf className="me-2" /> Ver Factura
+                <div className="mt-auto">
+                  <Link
+                    href={`/facturas/carpeta/${f.slug}?name=${encodeURIComponent(f.name)}`}
+                    className="btn btn-outline-primary w-100 rounded-pill"
+                  >
+                    Ver carpeta
                   </Link>
                 </div>
               </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
+
+        {!loading && folders.length === 0 && (
+          <div className="col-12">
+            <div className="alert alert-secondary">No se encontraron carpetas.</div>
+          </div>
+        )}
       </div>
     </div>
   );
