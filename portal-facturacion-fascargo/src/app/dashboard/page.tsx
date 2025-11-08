@@ -1,104 +1,196 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-const ADMIN_EMAILS = ['topoblete@alumnos.uai.cl', 'fascargo.chile.spa@gmail.com'];
+type Invoice = {
+  id: string;
+  title: string;
+  createdAt: string;
+  estadoPago: 'pagada' | 'pendiente' | 'anulada' | 'vencida';
+  total: number | null;
+  proveedor?: string | null;
+  folio?: string | null;
+};
+
+const CLP = (n: number) =>
+  'CLP ' + (n || 0).toLocaleString('es-CL', { maximumFractionDigits: 0 });
 
 export default function DashboardPage() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [userName, setUserName] = useState('Usuario');
+  const [items, setItems] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    const userId = localStorage.getItem('userId');
-    if (!userId) {
-      window.location.href = '/auth/login';
-      return;
-    }
-    fetch(`/api/users?userId=${userId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.email) {
-          setUserName(d.email.split('@')[0]);
-          setIsAdmin(ADMIN_EMAILS.includes(d.email));
-        }
-      })
-      .catch(() => {});
+    (async () => {
+      try {
+        const res = await fetch('/api/pdf/all', { cache: 'no-store' });
+        const data = await res.json();
+        setItems(Array.isArray(data) ? data : []);
+      } catch (e: any) {
+        setErr(e?.message || 'Error cargando datos');
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
+  const kpi = useMemo(() => {
+    const totalDocs = items.length;
+    const totalMonto = items.reduce((a, it) => a + (typeof it.total === 'number' ? it.total : 0), 0);
+    const pagadas = items.filter((d) => d.estadoPago === 'pagada').length;
+    const pendientes = items.filter((d) => d.estadoPago === 'pendiente').length;
+    const vencidas = items.filter((d) => d.estadoPago === 'vencida').length;
+    return { totalDocs, totalMonto, pagadas, pendientes, vencidas };
+  }, [items]);
+
+  const topProveedores = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const it of items) {
+      const p = (it.proveedor || '—').trim();
+      map.set(p, (map.get(p) || 0) + (typeof it.total === 'number' ? it.total : 0));
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  }, [items]);
+
   return (
-    <main
-      className="min-vh-100"
-      style={{
-        background:
-          'radial-gradient(1200px 500px at 50% -10%, rgba(37,99,235,.12), transparent 60%), linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%)',
-      }}
-    >
-      <section className="container py-5">
-        <header className="text-center mb-4">
-          <h1 className="display-5 fw-bold">
-            Bienvenido, <span className="text-primary">{userName}</span>
-          </h1>
-          <p className="text-muted lead">
-            Visualiza, organiza y gestiona tus facturas desde un solo lugar.
-          </p>
-        </header>
+    <div className="container py-4">
+      {/* Hero limpio, sin botones duplicados */}
+      <section className="rounded-4 bg-dashboard-hero p-4 p-md-5 mb-4 text-center shadow-sm">
+        <h1 className="display-6 fw-bold mb-2">
+          Bienvenido, <span className="text-primary">topoblete</span>
+        </h1>
+        <p className="text-muted m-0">
+          Visualiza, organiza y gestiona tus facturas desde un solo lugar.
+        </p>
+      </section>
 
-        {/* CTA buttons (opcional, ya tienes los de la navbar; estos son “atajos”) */}
-        <div className="d-flex flex-wrap justify-content-center gap-3 mb-5">
-          <Link
-            href="/facturas"
-            className="btn btn-success rounded-4 px-4 py-3 d-flex align-items-center gap-2 fw-semibold"
-          >
-            <i className="bi bi-file-earmark-text"></i> Ver facturas
-          </Link>
-          <Link
-            href="/facturas/gestion"
-            className="btn btn-outline-primary rounded-4 px-4 py-3 d-flex align-items-center gap-2 fw-semibold"
-          >
-            <i className="bi bi-kanban"></i> Gestión de facturas
-          </Link>
-          {isAdmin && (
-            <Link
-              href="/users"
-              className="btn btn-outline-secondary rounded-4 px-4 py-3 d-flex align-items-center gap-2 fw-semibold"
-            >
-              <i className="bi bi-shield-lock"></i> Gestión de dispositivos
-            </Link>
-          )}
+      {/* KPIs (más protagonistas) */}
+      <section className="row g-3 mb-4">
+        <div className="col-6 col-md-3">
+          <div className="stat-card py-4">
+            <div className="text-muted small">Facturas</div>
+            <div className="fs-2 fw-bold">{kpi.totalDocs}</div>
+          </div>
         </div>
-
-        {/* Feature cards */}
-        <div className="row g-4 justify-content-center">
-          {[
-            {
-              icon: 'bi-folder',
-              title: 'Carpetas inteligentes',
-              text: 'Agrupación automática por nombre para encontrar todo más rápido.',
-            },
-            {
-              icon: 'bi-bar-chart-line',
-              title: 'KPIs dinámicos',
-              text: 'Neto, IVA y Total recalculados al instante por carpeta o selección.',
-            },
-            {
-              icon: 'bi-lock',
-              title: 'Control de acceso',
-              text: 'Solo administradores gestionan dispositivos y acciones sensibles.',
-            },
-          ].map((c) => (
-            <div key={c.title} className="col-12 col-md-4">
-              <div className="card border-0 rounded-4 shadow-sm h-100">
-                <div className="card-body p-4">
-                  <i className={`bi ${c.icon} fs-3 text-primary mb-2`}></i>
-                  <h5 className="fw-semibold">{c.title}</h5>
-                  <p className="text-muted small m-0">{c.text}</p>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="col-6 col-md-3">
+          <div className="stat-card py-4">
+            <div className="text-muted small">Monto total</div>
+            <div className="fs-4 fw-bold">{CLP(kpi.totalMonto)}</div>
+          </div>
+        </div>
+        <div className="col-6 col-md-3">
+          <div className="stat-card py-4">
+            <div className="text-muted small">Pagadas</div>
+            <div className="fs-3 fw-bold text-success">{kpi.pagadas}</div>
+          </div>
+        </div>
+        <div className="col-6 col-md-3">
+          <div className="stat-card py-4">
+            <div className="text-muted small">Pendientes</div>
+            <div className="fs-3 fw-bold text-warning">{kpi.pendientes}</div>
+          </div>
         </div>
       </section>
-    </main>
+
+      {/* Tarjetas funcionales (con sus CTAs) */}
+      <section className="row g-3 mb-4">
+        <div className="col-12 col-lg-4">
+          <div className="card border-0 shadow-sm rounded-4 h-100">
+            <div className="card-body">
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <i className="bi bi-folder2 fs-4 text-primary"></i>
+                <h5 className="m-0">Carpetas inteligentes</h5>
+              </div>
+              <p className="text-muted small mb-3">
+                Agrupación automática por nombre para encontrar todo más rápido.
+              </p>
+              <Link href="/facturas" className="btn btn-primary btn-sm rounded-pill">
+                Abrir facturas
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-12 col-lg-4">
+          <div className="card border-0 shadow-sm rounded-4 h-100">
+            <div className="card-body">
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <i className="bi bi-graph-up fs-4 text-success"></i>
+                <h5 className="m-0">KPIs dinámicos</h5>
+              </div>
+              <p className="text-muted small mb-3">
+                Recalcula Neto, IVA y Total al instante por carpeta o selección.
+              </p>
+              <Link href="/facturas/gestion" className="btn btn-outline-success btn-sm rounded-pill">
+                Ir a gestión
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-12 col-lg-4">
+          <div className="card border-0 shadow-sm rounded-4 h-100">
+            <div className="card-body">
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <i className="bi bi-shield-lock fs-4 text-secondary"></i>
+                <h5 className="m-0">Gestión de dispositivos</h5>
+              </div>
+              <p className="text-muted small mb-3">
+                Solo administradores gestionan dispositivos y acciones sensibles.
+              </p>
+              <Link href="/users" className="btn btn-outline-secondary btn-sm rounded-pill">
+                Gestionar dispositivos
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Top Proveedores */}
+      <section className="card border-0 shadow-sm rounded-4">
+        <div className="card-body">
+          <div className="d-flex align-items-center gap-2 mb-3">
+            <i className="bi bi-award fs-4 text-warning"></i>
+            <h5 className="m-0">Top proveedores (actual)</h5>
+          </div>
+
+          {loading && <div className="text-muted small">Cargando…</div>}
+          {err && <div className="text-danger small">{err}</div>}
+
+          {!loading && !err && (
+            <div className="table-responsive">
+              <table className="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>Proveedor</th>
+                    <th className="text-end">Suma Total (CLP)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topProveedores.map(([prov, total]) => (
+                    <tr key={prov}>
+                      <td className="text-truncate" style={{ maxWidth: 560 }} title={prov}>
+                        {prov}
+                      </td>
+                      <td className="text-end fw-semibold">{CLP(total)}</td>
+                    </tr>
+                  ))}
+                  {topProveedores.length === 0 && (
+                    <tr>
+                      <td colSpan={2} className="text-center text-muted py-3">
+                        Sin datos
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
