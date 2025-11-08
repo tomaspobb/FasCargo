@@ -15,8 +15,8 @@ const monthToRange = (m: string) => {
   return { start, end };
 };
 
-function sum(arr: (number | null | undefined)[]) {
-  return arr.reduce((a, b) => a + (b || 0), 0);
+function sum(arr: Array<number | null | undefined>): number {
+  return arr.reduce<number>((acc, b) => acc + (b ?? 0), 0);
 }
 
 export default function FolderDetailPage() {
@@ -218,11 +218,19 @@ export default function FolderDetailPage() {
                       <input type="checkbox" className="form-check-input" checked={checked} onChange={() => toggle(f.id)} />
                       <h5 className="card-title fw-semibold m-0">{f.title}</h5>
                     </div>
-                    <span className={`badge rounded-pill ${
-                      f.estadoPago === 'pagada' ? 'bg-success'
-                        : f.estadoPago === 'pendiente' ? 'bg-warning text-dark'
-                        : f.estadoPago === 'vencida' ? 'bg-danger' : 'bg-secondary'
-                    }`}>{f.estadoPago || '—'}</span>
+                    <span
+                      className={`badge rounded-pill ${
+                        f.estadoPago === 'pagada'
+                          ? 'bg-success'
+                          : f.estadoPago === 'pendiente'
+                          ? 'bg-warning text-dark'
+                          : f.estadoPago === 'vencida'
+                          ? 'bg-danger'
+                          : 'bg-secondary'
+                      }`}
+                    >
+                      {f.estadoPago || '—'}
+                    </span>
                   </div>
 
                   <div className="text-muted small mt-2">
