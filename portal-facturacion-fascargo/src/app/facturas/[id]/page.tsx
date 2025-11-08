@@ -1,3 +1,4 @@
+// src/app/facturas/[id]/page.tsx
 import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
@@ -6,14 +7,33 @@ import { EditEstadoPago } from '@/components/EditEstadoPago';
 
 export const runtime = 'nodejs';
 
+// Helpers seguros
+function formatDateSafe(value?: unknown, locale: string = 'es-CL'): string {
+  if (!value) return '—';
+  const d =
+    value instanceof Date
+      ? value
+      : new Date(typeof value === 'string' || typeof value === 'number' ? value : '');
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(locale);
+}
+
+function clp(n?: unknown, locale: string = 'es-CL'): string {
+  return typeof n === 'number' ? `CLP ${n.toLocaleString(locale)}` : '—';
+}
+
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  // ✅ Evita el warning de Next: “params should be awaited…”
   const { id } = await params;
+
   await connectToDatabase();
   const pdf = await Pdf.findById(id);
   if (!pdf) return notFound();
 
   const nombreFactura =
-    pdf.title?.trim() || pdf.proveedor?.trim() || pdf.url.split('/').pop() || 'Factura';
+    pdf.title?.trim() ||
+    pdf.proveedor?.trim() ||
+    (typeof pdf.url === 'string' ? pdf.url.split('/').pop() : '') ||
+    'Factura';
 
   return (
     <main className="container py-5">
@@ -36,11 +56,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           </div>
           <div className="col-md-3">
             <div className="fw-semibold text-muted small">Emisión</div>
-            <div>
-              {pdf.fechaEmision
-                ? new Date(pdf.fechaEmision).toLocaleDateString()
-                : '—'}
-            </div>
+            <div>{formatDateSafe(pdf.fechaEmision)}</div>
           </div>
           <div className="col-md-2">
             <div className="fw-semibold text-muted small">Estado</div>
@@ -48,7 +64,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           </div>
           <div className="col-md-2">
             <div className="fw-semibold text-muted small">Subida</div>
-            <div>{new Date(pdf.createdAt).toLocaleDateString()}</div>
+            <div>{formatDateSafe(pdf.createdAt)}</div>
           </div>
         </div>
       </div>
@@ -63,11 +79,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           <div key={item.label} className="col-md-4">
             <div className="p-3 bg-white rounded-4 shadow-sm">
               <div className="fw-semibold text-muted small">{item.label}</div>
-              <div className="fs-5 fw-bold text-primary">
-                {typeof item.value === 'number'
-                  ? `CLP ${item.value.toLocaleString()}`
-                  : '—'}
-              </div>
+              <div className="fs-5 fw-bold text-primary">{clp(item.value)}</div>
             </div>
           </div>
         ))}
@@ -76,7 +88,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       {/* Visualizador PDF */}
       <div className="shadow-sm rounded-4 overflow-hidden mb-4" style={{ height: '75vh' }}>
         <iframe
-          src={pdf.url}
+          src={typeof pdf.url === 'string' ? pdf.url : ''}
           width="100%"
           height="100%"
           title={nombreFactura}
