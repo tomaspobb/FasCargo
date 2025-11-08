@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 type Invoice = {
   id: string;
@@ -16,10 +17,28 @@ type Invoice = {
 const CLP = (n: number) =>
   'CLP ' + (n || 0).toLocaleString('es-CL', { maximumFractionDigits: 0 });
 
+const nameFromEmail = (email?: string | null) => {
+  if (!email) return 'Usuario';
+  const base = email.split('@')[0] || 'Usuario';
+  return base.charAt(0).toUpperCase() + base.slice(1);
+};
+
 export default function DashboardPage() {
+  const { email } = useAuth();
   const [items, setItems] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  // Nombre dinámico del usuario (AuthContext + fallback localStorage)
+  const userName = useMemo(() => {
+    if (email) return nameFromEmail(email);
+    try {
+      const e = localStorage.getItem('email');
+      return nameFromEmail(e);
+    } catch {
+      return 'Usuario';
+    }
+  }, [email]);
 
   useEffect(() => {
     (async () => {
@@ -37,7 +56,10 @@ export default function DashboardPage() {
 
   const kpi = useMemo(() => {
     const totalDocs = items.length;
-    const totalMonto = items.reduce((a, it) => a + (typeof it.total === 'number' ? it.total : 0), 0);
+    const totalMonto = items.reduce(
+      (a, it) => a + (typeof it.total === 'number' ? it.total : 0),
+      0
+    );
     const pagadas = items.filter((d) => d.estadoPago === 'pagada').length;
     const pendientes = items.filter((d) => d.estadoPago === 'pendiente').length;
     const vencidas = items.filter((d) => d.estadoPago === 'vencida').length;
@@ -60,7 +82,7 @@ export default function DashboardPage() {
       {/* Hero limpio, sin botones duplicados */}
       <section className="rounded-4 bg-dashboard-hero p-4 p-md-5 mb-4 text-center shadow-sm">
         <h1 className="display-6 fw-bold mb-2">
-          Bienvenido, <span className="text-primary">topoblete</span>
+          Bienvenido, <span className="text-primary">{userName}</span>
         </h1>
         <p className="text-muted m-0">
           Visualiza, organiza y gestiona tus facturas desde un solo lugar.
@@ -124,7 +146,10 @@ export default function DashboardPage() {
               <p className="text-muted small mb-3">
                 Recalcula Neto, IVA y Total al instante por carpeta o selección.
               </p>
-              <Link href="/facturas/gestion" className="btn btn-outline-success btn-sm rounded-pill">
+              <Link
+                href="/facturas/gestion"
+                className="btn btn-outline-success btn-sm rounded-pill"
+              >
                 Ir a gestión
               </Link>
             </div>
@@ -172,7 +197,11 @@ export default function DashboardPage() {
                 <tbody>
                   {topProveedores.map(([prov, total]) => (
                     <tr key={prov}>
-                      <td className="text-truncate" style={{ maxWidth: 560 }} title={prov}>
+                      <td
+                        className="text-truncate"
+                        style={{ maxWidth: 560 }}
+                        title={prov}
+                      >
                         {prov}
                       </td>
                       <td className="text-end fw-semibold">{CLP(total)}</td>
