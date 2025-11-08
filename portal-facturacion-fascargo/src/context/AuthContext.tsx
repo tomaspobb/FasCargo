@@ -18,19 +18,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const storedId = localStorage.getItem('userId');
     const storedEmail = localStorage.getItem('email');
-
     if (storedId) setUserId(storedId);
     if (storedEmail) setEmail(storedEmail);
   }, []);
 
   const logout = () => {
-    localStorage.clear();
+    try {
+      localStorage.clear();
+    } catch {}
     setUserId(null);
     setEmail(null);
-    window.location.href = '/auth/login';
+    // ✅ redirige a /auth (no /auth/login)
+    window.location.href = '/auth';
   };
 
-  const value = {
+  const value: AuthContextType = {
     userId,
     email,
     isAuthenticated: !!userId,

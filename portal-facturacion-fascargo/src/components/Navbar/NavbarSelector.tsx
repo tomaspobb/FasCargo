@@ -10,6 +10,15 @@ type UserApi = { email?: string | null };
 
 export default function NavbarSelector() {
   const pathname = usePathname();
+
+  // 🔒 ocultar navbar en páginas de auth
+  const isAuthRoute =
+    pathname === '/auth' ||
+    pathname?.startsWith('/auth/login') ||
+    pathname?.startsWith('/auth/register');
+
+  if (isAuthRoute) return null;
+
   const isDashboard = pathname === '/dashboard';
 
   const [email, setEmail] = useState<string>('');
@@ -52,14 +61,17 @@ export default function NavbarSelector() {
       localStorage.removeItem('sessionVerified');
       localStorage.removeItem('twoFA-verified');
     } catch {}
-    window.location.href = '/auth/login';
+    // ✅ redirige a /auth
+    window.location.href = '/auth';
   };
 
   // Navegación central (se oculta en dashboard)
   const centerLinks = useMemo(() => {
     const active = (href: string) =>
       (pathname.startsWith('/facturas/gestion') && href === '/facturas/gestion') ||
-      (pathname.startsWith('/facturas') && !pathname.startsWith('/facturas/gestion') && href === '/facturas') ||
+      (pathname.startsWith('/facturas') &&
+        !pathname.startsWith('/facturas/gestion') &&
+        href === '/facturas') ||
       (pathname.startsWith('/users') && href === '/users');
 
     const baseBtn = 'btn btn-sm rounded-pill px-3 py-2 d-flex align-items-center gap-2';
@@ -111,7 +123,7 @@ export default function NavbarSelector() {
             <span className="fw-semibold">{userName}</span>
           </span>
           <button
-            className={`btn btn-danger ${isDashboard ? 'rounded-3 p-2' : 'rounded-pill px-3' } fw-semibold d-flex align-items-center gap-2`}
+            className={`btn btn-danger ${isDashboard ? 'rounded-3 p-2' : 'rounded-pill px-3'} fw-semibold d-flex align-items-center gap-2`}
             onClick={logout}
             title="Cerrar sesión"
             aria-label="Cerrar sesión"

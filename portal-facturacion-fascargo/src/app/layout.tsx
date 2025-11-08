@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
-import NavbarSelector from '@/components/Navbar/NavbarSelector';
-import Footer from '@/components/Footer';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import AppFrame from '@/components/AppFrame';
 
 export const metadata: Metadata = {
   title: 'Portal Facturación | FasCargo',
@@ -31,9 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
       <body className="bg-light text-dark d-flex flex-column min-vh-100">
         <AuthProvider>
-          <NavbarSelector />
-          <main className="flex-grow-1">{children}</main>
-          <Footer />
+          {/* 🔒 AppFrame encapsula guard + navbar/footer condicionales */}
+          <AppFrame>{children}</AppFrame>
+
           {/* ✅ Toasts globales */}
           <ToastContainer
             position="bottom-right"
