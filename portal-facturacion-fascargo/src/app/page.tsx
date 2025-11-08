@@ -1,8 +1,7 @@
-// Server Component
-import Dashboard from './dashboard/page';
+// src/app/page.tsx
+import { redirect } from 'next/navigation';
 
-export const dynamic = 'force-static';
-
-export default function Home() {
-  return <Dashboard />;
+export default function Page() {
+  // Fuerza la raíz a /auth (login)
+  redirect('/auth');
 }
