@@ -13,18 +13,22 @@ type Folder = {
   lastDate: number;
 };
 
-type Inv = InvoiceDTO & { folder?: string | null };
-
 export default function FacturasFoldersPage() {
-  const [all, setAll] = useState<Inv[]>([]);
+  const [all, setAll] = useState<InvoiceDTO[]>([]);
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // UI: crear carpeta (modal)
-  const [showModal, setShowModal] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
-  const modalRef = useRef<HTMLDivElement>(null);
+  // ===== Modal "Crear carpeta" =====
+  const [showCreate, setShowCreate] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createSearch, setCreateSearch] = useState('');
+  const [createSelected, setCreateSelected] = useState<Set<string>>(new Set());
+  const pendingMoveInvoiceId = useRef<string | null>(null); // desde "Mover → Crear carpeta"
 
+  // ===== Selección rápida en tarjetas inferiores =====
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // ===== Carga inicial =====
   useEffect(() => {
     (async () => {
       try {
@@ -37,11 +41,11 @@ export default function FacturasFoldersPage() {
     })();
   }, []);
 
+  // ===== Carpetas (derivadas) =====
   const folders = useMemo<Folder[]>(() => {
     const map = new Map<string, Folder>();
     for (const inv of all) {
-      const manual = (inv as Inv).folder?.trim();
-      const name = manual && manual.length > 0 ? manual : groupKey(inv);
+      const name = groupKey(inv);
       const f = map.get(name) ?? {
         name,
         slug: slugify(name),
@@ -59,122 +63,116 @@ export default function FacturasFoldersPage() {
       const s = q.toLowerCase();
       arr = arr.filter((f) => f.name.toLowerCase().includes(s));
     }
-    // más recientes arriba
     arr.sort((a, b) => b.lastDate - a.lastDate);
     return arr;
   }, [all, q]);
 
-  // Bandeja de facturas para drag & drop (limitamos a 50 por UI)
-  const trayInvoices = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    let arr = all.slice().sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-    if (s) {
+  const folderNames = useMemo(() => folders.map((f) => f.name), [folders]);
+
+  // ===== Helpers =====
+  const refreshAll = async () => {
+    const res = await fetch('/api/pdf/all', { cache: 'no-store' });
+    const data = await res.json();
+    setAll(data || []);
+  };
+
+  const moveInvoiceToFolder = async (invoiceId: string, folderName: string) => {
+    // Actualiza SOLO la carpeta (no toca el título personalizado)
+    const res = await fetch(`/api/pdf/${invoiceId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderName }),
+    });
+    if (res.ok) await refreshAll();
+  };
+
+  // ====== Modal Crear Carpeta ======
+  const openCreateModal = (suggest?: string, moveInvoiceId?: string) => {
+    setCreateName(suggest ?? '');
+    setCreateSearch('');
+    // Preselección si viene desde "Mover → Crear carpeta"
+    const seed = new Set<string>();
+    if (moveInvoiceId) seed.add(moveInvoiceId);
+    setCreateSelected(seed);
+    pendingMoveInvoiceId.current = moveInvoiceId ?? null;
+    setShowCreate(true);
+  };
+
+  const closeCreateModal = () => {
+    setShowCreate(false);
+    setCreateName('');
+    setCreateSearch('');
+    setCreateSelected(new Set());
+    pendingMoveInvoiceId.current = null;
+  };
+
+  // Lista filtrable dentro del modal
+  const modalList = useMemo(() => {
+    const term = createSearch.trim().toLowerCase();
+    let arr = [...all].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+    if (term) {
       arr = arr.filter(
         (i) =>
-          (i.title || '').toLowerCase().includes(s) ||
-          (i.proveedor || '').toLowerCase().includes(s) ||
-          (i.folio || '').toLowerCase().includes(s),
+          (i.title || '').toLowerCase().includes(term) ||
+          (i.folio || '').toLowerCase().includes(term) ||
+          (i.proveedor || '').toLowerCase().includes(term) ||
+          groupKey(i).toLowerCase().includes(term),
       );
     }
-    return arr.slice(0, 50);
-  }, [all, q]);
+    return arr.slice(0, 50); // evita listas inmensas en el modal
+  }, [all, createSearch]);
 
-  // Todas las carpetas disponibles (para mover por botón)
-  const allFolderNames = useMemo(() => folders.map((f) => f.name), [folders]);
-
-  // Drag start: ponemos el id y el folder actual
-  const onDragStart = (e: React.DragEvent, id: string) => {
-    e.dataTransfer.setData('text/plain', id);
-  };
-
-  // Drop en una carpeta: PATCH folder
-  const onDropToFolder = async (e: React.DragEvent, folderName: string) => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData('text/plain');
-    if (!id) return;
-    await moveInvoiceToFolder(id, folderName);
-  };
-
-  const allowDrop = (e: React.DragEvent) => e.preventDefault();
-
-  // Mover por botón/selector
-  const moveInvoiceToFolder = async (id: string, folderName: string) => {
-    try {
-      const res = await fetch(`/api/pdf/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: folderName }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'No se pudo mover');
-      // Refrescar en memoria
-      setAll((prev) => prev.map((p) => (p.id === id ? { ...p, folder: folderName } : p)));
-    } catch (e: any) {
-      alert(e.message || 'Error al mover la factura');
-    }
-  };
-
-  // Crear carpeta (no requiere API propia: basta con asignar una factura a esa carpeta.
-  // Aun así, dejamos la opción de crear "vacía" para que aparezca en la grilla:
-  // esto se logra creando un "placeholder" en el estado local; desaparecerá si queda vacía
-  // después de refrescar. UX: Mostramos alerta con tip.
-  const createFolder = () => {
-    const name = newFolderName.trim();
-    if (!name) return;
-    const exist = folders.some((f) => f.name.toLowerCase() === name.toLowerCase());
-    if (exist) {
-      alert('Ya existe una carpeta con ese nombre.');
-      return;
-    }
-    // Insertamos un placeholder local (count 0)
-    const placeholder: Folder = {
-      name,
-      slug: slugify(name),
-      count: 0,
-      total: 0,
-      lastDate: Date.now(),
-    };
-    // Hack simple: añadimos al "estado" de all un fake "carpeta virtual" con id temporal para que se renderice.
-    // Más simple: guardamos en un estado auxiliar de carpetas vacías:
-    setVirtualFolders((prev) => {
-      const set = new Set(prev);
-      set.add(name);
-      return set;
+  const toggleModalSelect = (id: string) => {
+    setCreateSelected((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
     });
-    setShowModal(false);
-    setNewFolderName('');
-    setTimeout(() => {
-      alert(
-        'Carpeta creada. Arrastra facturas desde la bandeja a esta carpeta para que se mantenga.',
-      );
-    }, 50);
   };
 
-  // Carpetas creadas sin facturas todavía (solo UI)
-  const [virtualFolders, setVirtualFolders] = useState<Set<string>>(new Set());
+  const createFolderAndMove = async () => {
+    const name = createName.trim();
+    if (!name) return;
+    if (createSelected.size === 0) return; // obliga a seleccionar ≥1
 
-  // Lista final a mostrar = folders reales + virtuales
-  const foldersUI = useMemo(() => {
-    const ui = [...folders];
-    for (const name of virtualFolders) {
-      const exists = folders.some((f) => f.name === name);
-      if (!exists) {
-        ui.push({
-          name,
-          slug: slugify(name),
-          count: 0,
-          total: 0,
-          lastDate: Date.now(),
-        });
-      }
-    }
-    // ordenar por lastDate desc
-    ui.sort((a, b) => b.lastDate - a.lastDate);
-    return ui;
-  }, [folders, virtualFolders]);
+    const ids = Array.from(createSelected);
+    await Promise.all(ids.map((id) => moveInvoiceToFolder(id, name)));
+    closeCreateModal();
+  };
 
+  // ===== Tarjetas “facturas sueltas” =====
+  const loose = useMemo(
+    () => [...all].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
+    [all],
+  );
+
+  const PAGE = 12;
+  const [page, setPage] = useState(1);
+  const pageItems = useMemo(() => loose.slice(0, PAGE * page), [loose, page]);
+  const canShowMore = PAGE * page < loose.length;
+
+  const toggleQuickSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const moveSelectionTo = async (folderName: string) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    await Promise.all(ids.map((id) => moveInvoiceToFolder(id, folderName)));
+    clearSelection();
+  };
+
+  // ===== UI =====
   return (
     <div className="container py-4">
+      {/* Header */}
       <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
         <div className="d-flex align-items-center gap-2">
           <i className="bi bi-folder2-open fs-3 text-primary"></i>
@@ -183,12 +181,14 @@ export default function FacturasFoldersPage() {
 
         <div className="d-flex gap-2">
           <button
-            className="btn btn-outline-primary rounded-pill"
-            onClick={() => setShowModal(true)}
+            className="btn btn-dark rounded-pill"
+            onClick={() => openCreateModal('')}
+            title="Crear carpeta"
           >
             <i className="bi bi-folder-plus me-1" />
             Crear carpeta
           </button>
+
           <Link href="/facturas/subir" className="btn btn-primary rounded-pill">
             <i className="bi bi-upload me-1" />
             Subir nueva factura
@@ -196,7 +196,7 @@ export default function FacturasFoldersPage() {
         </div>
       </div>
 
-      {/* Filtros */}
+      {/* Buscador carpetas */}
       <div className="row g-3 mb-3">
         <div className="col-md-6 col-lg-5">
           <input
@@ -210,14 +210,17 @@ export default function FacturasFoldersPage() {
 
       {loading && <div className="alert alert-info">Cargando facturas…</div>}
 
-      {/* Grid de carpetas con Drop Targets */}
+      {/* Grid carpetas */}
       <div className="row g-4 mb-4">
-        {foldersUI.map((f) => (
+        {folders.map((f) => (
           <div key={f.slug} className="col-lg-4 col-md-6">
             <div
               className="card border-0 rounded-4 shadow-sm h-100"
-              onDragOver={allowDrop}
-              onDrop={(e) => onDropToFolder(e, f.name)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={async (e) => {
+                const id = e.dataTransfer.getData('text/invoice-id');
+                if (id) await moveInvoiceToFolder(id, f.name);
+              }}
             >
               <div className="card-body d-flex flex-column">
                 <div className="d-flex align-items-start justify-content-between">
@@ -228,14 +231,16 @@ export default function FacturasFoldersPage() {
                 </div>
 
                 <div className="text-muted small mb-3">
-                  <div><strong>Total acumulado:</strong> {CLP(f.total)}</div>
+                  <div>
+                    <strong>Total acumulado:</strong> {CLP(f.total)}
+                  </div>
                   <div>
                     <strong>Última carga:</strong>{' '}
                     {f.lastDate ? new Date(f.lastDate).toLocaleDateString() : '—'}
                   </div>
                 </div>
 
-                <div className="mt-auto d-flex gap-2">
+                <div className="mt-auto">
                   <Link
                     href={`/facturas/carpeta/${f.slug}?name=${encodeURIComponent(f.name)}`}
                     className="btn btn-outline-primary w-100 rounded-pill"
@@ -243,148 +248,294 @@ export default function FacturasFoldersPage() {
                     Ver carpeta
                   </Link>
                 </div>
+              </div>
 
-                <div className="small text-muted mt-2">
-                  Sugerencia: arrastra facturas aquí para moverlas a <strong>{f.name}</strong>.
-                </div>
+              <div className="px-3 pb-3 text-muted small">
+                Sugerencia: arrastra facturas aquí para moverlas a <strong>{f.name}</strong>.
               </div>
             </div>
           </div>
         ))}
 
-        {!loading && foldersUI.length === 0 && (
+        {!loading && folders.length === 0 && (
           <div className="col-12">
             <div className="alert alert-secondary">No se encontraron carpetas.</div>
           </div>
         )}
       </div>
 
-      {/* Bandeja de facturas arrastrables */}
-      <div className="bg-white rounded-4 shadow-sm p-3">
-        <div className="d-flex align-items-center gap-2 mb-2">
-          <i className="bi bi-collection"></i>
-          <h5 className="m-0">Facturas (arrástralas a una carpeta)</h5>
-        </div>
-        <div className="row g-3">
-          {trayInvoices.map((it) => {
-            const currentFolder =
-              (it as Inv).folder?.trim() || groupKey(it);
-            return (
-              <div key={it.id} className="col-xl-3 col-lg-4 col-md-6">
-                <div
-                  className="p-3 border rounded-3 h-100 bg-light-subtle"
-                  draggable
-                  onDragStart={(e) => onDragStart(e, it.id)}
-                  title="Arrastra a una carpeta para moverla"
-                >
-                  <div className="d-flex justify-content-between align-items-start">
-                    <div className="fw-semibold text-truncate" title={it.title || 'Factura'}>
-                      {it.title || 'Factura'}
-                    </div>
-                    <span className="badge text-bg-light">{new Date(it.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <div className="small text-muted text-truncate" title={currentFolder}>
-                    Carpeta actual: <strong>{currentFolder}</strong>
-                  </div>
-                  <div className="small text-muted">
-                    Total: {typeof it.total === 'number' ? CLP(it.total) : '—'}
-                  </div>
-
-                  <div className="mt-2 d-flex flex-wrap gap-2">
-                    <Link href={`/facturas/${it.id}`} className="btn btn-sm btn-outline-primary rounded-pill">
-                      Ver
-                    </Link>
-
-                    {/* Mover por selector */}
-                    <div className="dropdown">
-                      <button
-                        className="btn btn-sm btn-outline-secondary rounded-pill dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                        aria-expanded="false"
-                        type="button"
-                      >
-                        Mover a carpeta…
-                      </button>
-                      <ul className="dropdown-menu dropdown-menu-end">
-                        {allFolderNames.map((name) => (
-                          <li key={name}>
-                            <button
-                              className="dropdown-item"
-                              onClick={() => moveInvoiceToFolder(it.id, name)}
-                            >
-                              {name}
-                            </button>
-                          </li>
-                        ))}
-                        <li><hr className="dropdown-divider" /></li>
-                        <li>
-                          <button
-                            className="dropdown-item"
-                            onClick={async () => {
-                              const name = window.prompt('Nombre de nueva carpeta:')?.trim();
-                              if (!name) return;
-                              await moveInvoiceToFolder(it.id, name);
-                              // opcional: si queremos asegurar que aparezca en UI aunque aún no recarguemos
-                              setVirtualFolders((prev) => new Set(prev).add(name));
-                            }}
-                          >
-                            + Crear nueva carpeta…
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {trayInvoices.length === 0 && (
-            <div className="col-12">
-              <div className="alert alert-secondary m-0">No hay facturas para mostrar.</div>
-            </div>
-          )}
-        </div>
+      {/* Listado inferior de facturas */}
+      <div className="d-flex align-items-center gap-2 mb-2">
+        <i className="bi bi-journals"></i>
+        <h5 className="m-0">Facturas (arrástralas a una carpeta)</h5>
       </div>
 
-      {/* Modal Crear carpeta */}
-      {showModal && (
-        <div className="modal fade show d-block" tabIndex={-1} ref={modalRef} role="dialog">
-          <div className="modal-dialog modal-dialog-centered" role="document">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h6 className="modal-title">Crear carpeta</h6>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowModal(false)}
-                  aria-label="Cerrar"
-                />
-              </div>
-              <div className="modal-body">
-                <label className="form-label small">Nombre de la carpeta</label>
-                <input
-                  autoFocus
-                  className="form-control"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder="Ej: Transporte Leis"
-                />
-                <div className="form-text">
-                  Luego arrastra facturas a esta carpeta para que quede registrada.
+      <div className="row g-3">
+        {pageItems.map((it) => {
+          const k = groupKey(it);
+          const checked = selectedIds.has(it.id);
+          return (
+            <div key={it.id} className="col-xl-4 col-lg-6">
+              <div
+                className={`p-3 rounded-4 border bg-white shadow-sm h-100 ${
+                  checked ? 'border-primary' : 'border-0'
+                }`}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/invoice-id', it.id);
+                }}
+              >
+                <div className="d-flex justify-content-between align-items-start">
+                  <div className="fw-semibold">{it.title}</div>
+                  <div className="text-muted small">
+                    {new Date(it.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+
+                <div className="text-muted small">
+                  <div>
+                    <strong>Carpeta actual:</strong> {k || '—'}
+                  </div>
+                  <div>
+                    <strong>Folio:</strong> {it.folio || '—'}
+                  </div>
+                  <div>
+                    <strong>Total:</strong>{' '}
+                    {CLP(typeof it.total === 'number' ? it.total : 0)}
+                  </div>
+                </div>
+
+                <div className="mt-2 d-flex gap-2 align-items-center">
+                  <Link
+                    href={`/facturas/${it.id}`}
+                    className="btn btn-outline-primary btn-sm rounded-pill"
+                  >
+                    Ver
+                  </Link>
+
+                  <div className="dropdown">
+                    <button
+                      className="btn btn-sm btn-outline-secondary rounded-pill dropdown-toggle"
+                      data-bs-toggle="dropdown"
+                    >
+                      Mover a carpeta…
+                    </button>
+                    <ul className="dropdown-menu">
+                      {folderNames.map((fn) => (
+                        <li key={fn}>
+                          <button
+                            className="dropdown-item"
+                            onClick={() => moveInvoiceToFolder(it.id, fn)}
+                          >
+                            {fn}
+                          </button>
+                        </li>
+                      ))}
+                      <li>
+                        <hr className="dropdown-divider" />
+                      </li>
+                      <li>
+                        <button
+                          className="dropdown-item"
+                          onClick={() => openCreateModal('', it.id)}
+                        >
+                          <i className="bi bi-folder-plus me-2" />
+                          Crear carpeta…
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="form-check ms-auto">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleQuickSelect(it.id)}
+                      id={`sel-${it.id}`}
+                    />
+                  </div>
                 </div>
               </div>
+            </div>
+          );
+        })}
+
+        {!pageItems.length && !loading && (
+          <div className="col-12">
+            <div className="alert alert-secondary">No hay facturas para mostrar.</div>
+          </div>
+        )}
+      </div>
+
+      {canShowMore && (
+        <div className="text-center mt-3">
+          <button
+            className="btn btn-outline-secondary rounded-pill"
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Cargar más
+          </button>
+        </div>
+      )}
+
+      {/* Acciones de selección múltiple */}
+      {selectedIds.size > 0 && (
+        <div className="alert alert-info rounded-4 mt-4 d-flex align-items-center justify-content-between">
+          <div>{selectedIds.size} seleccionada{selectedIds.size > 1 ? 's' : ''}.</div>
+          <div className="d-flex gap-2">
+            <div className="dropdown">
+              <button
+                className="btn btn-primary btn-sm rounded-pill dropdown-toggle"
+                data-bs-toggle="dropdown"
+              >
+                Mover selección a…
+              </button>
+              <ul className="dropdown-menu">
+                {folderNames.map((fn) => (
+                  <li key={fn}>
+                    <button
+                      className="dropdown-item"
+                      onClick={() => moveSelectionTo(fn)}
+                    >
+                      {fn}
+                    </button>
+                  </li>
+                ))}
+                <li>
+                  <hr className="dropdown-divider" />
+                </li>
+                <li>
+                  <button className="dropdown-item" onClick={() => openCreateModal('')}>
+                    <i className="bi bi-folder-plus me-2" />
+                    Crear carpeta…
+                  </button>
+                </li>
+              </ul>
+            </div>
+            <button
+              className="btn btn-outline-secondary btn-sm rounded-pill"
+              onClick={clearSelection}
+            >
+              Limpiar selección
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal Crear Carpeta (con buscador y selección obligatoria) ===== */}
+      {showCreate && (
+        <div
+          className="modal fade show"
+          style={{ display: 'block', background: 'rgba(0,0,0,.35)' }}
+        >
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content rounded-4">
+              <div className="modal-header">
+                <h5 className="modal-title">Crear carpeta</h5>
+                <button className="btn-close" onClick={closeCreateModal}></button>
+              </div>
+
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label small">Nombre de la carpeta</label>
+                  <input
+                    className="form-control"
+                    placeholder="Ej: Transporte Leis"
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                  />
+                </div>
+
+                <div className="mb-2 d-flex align-items-center justify-content-between">
+                  <label className="form-label small m-0">
+                    Selecciona al menos <strong>una factura</strong> para crear la carpeta
+                  </label>
+                  <input
+                    className="form-control"
+                    style={{ maxWidth: 320 }}
+                    placeholder="Buscar por título, folio, proveedor…"
+                    value={createSearch}
+                    onChange={(e) => setCreateSearch(e.target.value)}
+                  />
+                </div>
+
+                <div className="table-responsive border rounded-3">
+                  <table className="table table-sm align-middle m-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th style={{ width: 36 }}></th>
+                        <th>Título</th>
+                        <th>Carpeta actual</th>
+                        <th>Folio</th>
+                        <th className="text-end">Total</th>
+                        <th>Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modalList.map((it) => {
+                        const checked = createSelected.has(it.id);
+                        return (
+                          <tr key={it.id}>
+                            <td>
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                checked={checked}
+                                onChange={() => toggleModalSelect(it.id)}
+                                aria-label={`Seleccionar ${it.title}`}
+                              />
+                            </td>
+                            <td className="text-truncate" style={{ maxWidth: 280 }}>
+                              {it.title}
+                            </td>
+                            <td className="text-muted small">{groupKey(it)}</td>
+                            <td className="text-muted small">{it.folio || '—'}</td>
+                            <td className="text-end">{CLP(typeof it.total === 'number' ? it.total : 0)}</td>
+                            <td className="text-muted small">
+                              {new Date(it.createdAt).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {modalList.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="text-center text-muted py-3">
+                            No hay resultados para tu búsqueda.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="form-text mt-2">
+                  Consejo: puedes abrir este modal desde “Mover a carpeta… → Crear carpeta” en una
+                  factura; esa factura quedará pre-seleccionada aquí.
+                </div>
+              </div>
+
               <div className="modal-footer">
-                <button className="btn btn-outline-secondary rounded-pill" onClick={() => setShowModal(false)}>
+                <button className="btn btn-outline-secondary" onClick={closeCreateModal}>
                   Cancelar
                 </button>
-                <button className="btn btn-primary rounded-pill" onClick={createFolder}>
+                <button
+                  className="btn btn-dark"
+                  onClick={createFolderAndMove}
+                  disabled={!createName.trim() || createSelected.size === 0}
+                  title={
+                    !createName.trim()
+                      ? 'Ingresa el nombre de la carpeta'
+                      : createSelected.size === 0
+                      ? 'Selecciona al menos una factura'
+                      : 'Crear carpeta'
+                  }
+                >
                   Crear
                 </button>
               </div>
             </div>
           </div>
-          <div className="modal-backdrop fade show" onClick={() => setShowModal(false)} />
         </div>
       )}
     </div>

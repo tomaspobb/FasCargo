@@ -46,10 +46,8 @@ export default function FolderDetailPage() {
   const items = useMemo(() => {
     let arr = all.filter((i) => groupKey(i) === folderName);
 
-    // por estado
     if (status !== 'Todas') arr = arr.filter((i) => i.estadoPago === status);
 
-    // por texto
     if (q.trim()) {
       const term = q.trim().toLowerCase();
       arr = arr.filter(
@@ -60,7 +58,6 @@ export default function FolderDetailPage() {
       );
     }
 
-    // por mes
     if (mFrom) {
       const { start } = monthToRange(mFrom);
       arr = arr.filter((i) => +new Date(i.createdAt) >= +start);
@@ -70,7 +67,6 @@ export default function FolderDetailPage() {
       arr = arr.filter((i) => +new Date(i.createdAt) <= +end);
     }
 
-    // ordenar
     switch (sort) {
       case 'fecha-asc':
         arr.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
@@ -99,14 +95,6 @@ export default function FolderDetailPage() {
   const kIva = sum(base.map((i) => i.iva));
   const kTotal = sum(base.map((i) => i.total));
 
-  const toggle = (id: string) =>
-    setSelectedIds((prev) => {
-      const s = new Set(prev);
-      if (s.has(id)) s.delete(id);
-      else s.add(id);
-      return s;
-    });
-
   const allChecked = items.length > 0 && selectedIds.size === items.length;
   const toggleAll = () => {
     setSelectedIds((prev) => {
@@ -115,20 +103,77 @@ export default function FolderDetailPage() {
     });
   };
 
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+
+  // -------- Exportar a Excel (.xlsx) --------
+  const exportXlsx = async (onlySelection = false) => {
+    const rows = (onlySelection && selItems.length ? selItems : items).map((r) => ({
+      Título: r.title ?? '',
+      Carpeta: groupKey(r),
+      Folio: r.folio ?? '',
+      Proveedor: r.proveedor ?? '',
+      Estado: r.estadoPago ?? '',
+      Neto: r.neto ?? null,
+      IVA: r.iva ?? null,
+      Total: r.total ?? null,
+      Subida: new Date(r.createdAt).toLocaleString(),
+      SubidaISO: r.createdAt,
+    }));
+
+    const XLSX = await import('xlsx'); // carga dinámica para cliente
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // auto-width por columna (calculado por longitud de celdas)
+    const cols = Object.keys(rows[0] ?? { Título: '' }).map((k) => {
+      const maxLen = Math.max(
+        k.length,
+        ...rows.map((r) => String((r as any)[k] ?? '').length),
+      );
+      return { wch: Math.min(Math.max(maxLen + 2, 10), 40) }; // ancho entre 10 y 40
+    });
+    (ws as any)['!cols'] = cols;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, folderName || 'Carpeta');
+
+    const fileName =
+      (folderName || 'carpeta') +
+      (onlySelection && selItems.length ? `-seleccion-${selItems.length}` : '') +
+      '.xlsx';
+
+    XLSX.writeFile(wb, fileName);
+  };
+
+  // Estados como “chips” rápidos
+  const statusChip = (label: 'Todas' | 'pagada' | 'pendiente' | 'anulada' | 'vencida', text: string) => (
+    <button
+      key={label}
+      className={`btn btn-sm rounded-pill ${
+        status === label ? 'btn-primary' : 'btn-outline-secondary'
+      }`}
+      onClick={() => setStatus(label)}
+    >
+      {text}
+    </button>
+  );
+
   return (
     <div className="container py-4">
+      {/* Header simple sin botones extra */}
       <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
         <div className="d-flex align-items-center gap-2">
           <i className="bi bi-folder fs-3 text-primary" />
           <h2 className="m-0 fw-bold text-primary">{folderName || 'Carpeta'}</h2>
         </div>
-        <div className="d-flex gap-2">
-          <Link href="/facturas" className="btn btn-outline-primary rounded-pill">
-            ← Carpetas
-          </Link>
-          <Link href="/dashboard" className="btn btn-outline-secondary rounded-pill">
-            ← Dashboard
-          </Link>
+        <div className="text-muted small">
+          {items.length} factura{items.length !== 1 ? 's' : ''} |{' '}
+          {selItems.length ? `${selItems.length} seleccionada${selItems.length > 1 ? 's' : ''}` : 'sin selección'}
         </div>
       </div>
 
@@ -139,24 +184,39 @@ export default function FolderDetailPage() {
         <div className="col-sm-4"><Kpi label="Total" value={CLP(kTotal)} /></div>
       </div>
 
-      {/* Filtros */}
-      <div className="bg-white rounded-4 shadow-sm p-3 mb-3">
-        <div className="row g-3 align-items-end">
-          <div className="col-md-3">
-            <label className="form-label small">Estado</label>
-            <select
-              className="form-select"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as any)}
+      {/* Barra de filtros sticky */}
+      <div
+        className="bg-white rounded-4 shadow-sm p-3 mb-3"
+        style={{ position: 'sticky', top: 70, zIndex: 10 }}
+      >
+        {/* Chips de estado */}
+        <div className="d-flex flex-wrap gap-2 mb-3">
+          {statusChip('Todas', 'Todas')}
+          {statusChip('pagada', 'Pagadas')}
+          {statusChip('pendiente', 'Pendientes')}
+          {statusChip('anulada', 'Anuladas')}
+          {statusChip('vencida', 'Vencidas')}
+          <div className="ms-auto d-flex gap-2">
+            <button
+              className="btn btn-sm btn-outline-secondary rounded-pill"
+              onClick={() => {
+                setStatus('Todas'); setQ(''); setMFrom(''); setMTo('');
+              }}
+              title="Limpiar filtros"
             >
-              <option value="Todas">Todas</option>
-              <option value="pagada">Pagadas</option>
-              <option value="pendiente">Pendientes</option>
-              <option value="anulada">Anuladas</option>
-              <option value="vencida">Vencidas</option>
-            </select>
+              Limpiar filtros
+            </button>
+            <button
+              className="btn btn-sm btn-outline-primary rounded-pill"
+              onClick={() => exportXlsx(false)}
+              title="Exportar Excel"
+            >
+              <i className="bi bi-download me-1" /> Exportar Excel
+            </button>
           </div>
+        </div>
 
+        <div className="row g-3 align-items-end">
           <div className="col-md-3">
             <label className="form-label small">Ordenar</label>
             <select className="form-select" value={sort} onChange={(e) => setSort(e.target.value as any)}>
@@ -176,32 +236,38 @@ export default function FolderDetailPage() {
             <input type="month" className="form-control" value={mTo} onChange={(e) => setMTo(e.target.value)} />
           </div>
 
-          <div className="col-md-6">
-            <label className="form-label small">Buscar (título, folio o proveedor)</label>
+          <div className="col-md-3">
+            <label className="form-label small">Buscar</label>
             <input
               className="form-control"
-              placeholder="Ej: Transporte Leis, 1933…"
+              placeholder="Título, folio o proveedor…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
+        </div>
 
-          <div className="col-md-6 d-flex align-items-center gap-3">
-            <div className="form-check">
-              <input className="form-check-input" type="checkbox" id="checkAll" checked={allChecked} onChange={toggleAll} />
-              <label className="form-check-label" htmlFor="checkAll">
-                Seleccionar todas ({items.length})
-              </label>
-            </div>
-            {(mFrom || mTo || q || status !== 'Todas') && (
-              <button
-                className="btn btn-sm btn-outline-secondary rounded-pill"
-                onClick={() => { setMFrom(''); setMTo(''); setQ(''); setStatus('Todas'); }}
-              >
-                Limpiar filtros
-              </button>
-            )}
+        {/* Acciones de selección */}
+        <div className="d-flex align-items-center gap-3 mt-3">
+          <div className="form-check">
+            <input className="form-check-input" type="checkbox" id="checkAll" checked={allChecked} onChange={toggleAll} />
+            <label className="form-check-label" htmlFor="checkAll">
+              Seleccionar todas ({items.length})
+            </label>
           </div>
+          {selectedIds.size > 0 && (
+            <div className="ms-auto d-flex gap-2">
+              <span className="badge bg-primary-subtle text-primary rounded-pill">
+                {selectedIds.size} seleccionada{selectedIds.size > 1 ? 's' : ''}
+              </span>
+              <button className="btn btn-sm btn-outline-secondary rounded-pill" onClick={() => setSelectedIds(new Set())}>
+                Limpiar selección
+              </button>
+              <button className="btn btn-sm btn-outline-primary rounded-pill" onClick={() => exportXlsx(true)}>
+                Exportar selección
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -215,7 +281,12 @@ export default function FolderDetailPage() {
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start">
                     <div className="d-flex align-items-center gap-2">
-                      <input type="checkbox" className="form-check-input" checked={checked} onChange={() => toggle(f.id)} />
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={checked}
+                        onChange={() => toggleOne(f.id)}
+                      />
                       <h5 className="card-title fw-semibold m-0">{f.title}</h5>
                     </div>
                     <span

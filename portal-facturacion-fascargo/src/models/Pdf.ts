@@ -1,20 +1,21 @@
-// src/models/Pdf.ts
 import mongoose, { Schema, Model } from "mongoose";
 
 export interface IPdf {
   _id?: string;
-  title: string;           // nombre visible en UI
-  url: string;             // URL pública de Vercel Blob
-  uploadedBy?: string;     // email o userId (opcional por ahora)
 
-  // Estados de negocio y de proceso
+  // UI
+  title: string;            // título visible de la factura (NO depende de la carpeta)
+  url: string;              // URL pública (Vercel Blob)
+  uploadedBy?: string;      // email o userId (opcional)
+
+  // Carpeta lógica (para agrupación / KPIs)
+  folderName?: string | null; // <— NUEVO: nombre de carpeta elegido o creado; si falta, se agrupa por estandarización del título
+
+  // Estados
   estadoPago: "pagada" | "pendiente" | "anulada" | "vencida";
   estadoSistema: "uploaded" | "parsed" | "validated" | "rejected";
 
-  // Agrupación / carpeta manual
-  folder?: string | null;
-
-  // Metadatos contables mínimos (opcionales)
+  // Metadatos
   folio?: string;
   proveedor?: string;
   fechaEmision?: Date;
@@ -33,6 +34,8 @@ const PdfSchema = new Schema<IPdf>(
     url:   { type: String, required: true },
     uploadedBy: { type: String },
 
+    folderName: { type: String, default: null }, // <— NUEVO
+
     estadoPago: {
       type: String,
       enum: ["pagada","pendiente","anulada","vencida"],
@@ -43,8 +46,6 @@ const PdfSchema = new Schema<IPdf>(
       enum: ["uploaded","parsed","validated","rejected"],
       default: "uploaded"
     },
-
-    folder: { type: String, default: null }, // ✅ carpeta manual
 
     folio: String,
     proveedor: String,

@@ -1,4 +1,3 @@
-// src/app/api/upload/route.ts
 import { put } from '@vercel/blob';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
@@ -16,7 +15,6 @@ function slugify(name: string) {
     .slice(0, 80);
 }
 
-// utils
 function toNum(v: FormDataEntryValue | null) {
   if (v == null) return undefined;
   const s = String(v).trim();
@@ -38,7 +36,13 @@ export async function POST(req: Request) {
     const file = formData.get('file') as File | null;
     const name = (formData.get('name') as string | null)?.trim() || '';
     const uploadedBy = (formData.get('uploadedBy') as string | null) || undefined;
-    const folder = (formData.get('folder') as string | null)?.trim() || null; // ✅ carpeta manual
+
+    // NUEVO: carpeta seleccionada/creada
+    const folderMode = (formData.get('folderMode') as string | null) || 'auto';
+    const folderNameRaw = (formData.get('folderName') as string | null) || null;
+    const folderName = folderMode === 'auto'
+      ? null
+      : (folderNameRaw ? folderNameRaw.trim() : null);
 
     if (!file) return NextResponse.json({ error: 'Archivo no recibido' }, { status: 400 });
     if (!name) return NextResponse.json({ error: 'Nombre no recibido' }, { status: 400 });
@@ -54,7 +58,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'El PDF supera 25MB' }, { status: 413 });
     }
 
-    // campos opcionales parseados
     const proveedor = (formData.get('proveedor') as string | null)?.trim() || undefined;
     const folio     = (formData.get('folio') as string | null)?.trim() || undefined;
     const neto      = toNum(formData.get('neto'));
@@ -62,7 +65,6 @@ export async function POST(req: Request) {
     const total     = toNum(formData.get('total'));
     const fechaEmision = toDate(formData.get('fechaEmision'));
 
-    // sube a Blob
     const arrayBuffer = await file.arrayBuffer();
     const safe = slugify(name) || 'factura';
     const objectName = `pdfs/${safe}-${Date.now()}.pdf`;
@@ -85,9 +87,9 @@ export async function POST(req: Request) {
       title: name,
       url: blob.url,
       uploadedBy,
+      folderName, // <— guarda la carpeta elegida/creada, o null si auto
       estadoPago: 'pendiente',
       estadoSistema,
-      folder, // ✅ si llega, se guarda
       proveedor,
       folio,
       neto,
@@ -101,9 +103,9 @@ export async function POST(req: Request) {
       title: doc.title,
       url: doc.url,
       uploadedBy: doc.uploadedBy || null,
+      folderName: doc.folderName || null,
       estadoPago: doc.estadoPago,
       estadoSistema: doc.estadoSistema,
-      folder: doc.folder || null,
       proveedor: doc.proveedor || null,
       folio: doc.folio || null,
       neto: typeof doc.neto === 'number' ? doc.neto : null,

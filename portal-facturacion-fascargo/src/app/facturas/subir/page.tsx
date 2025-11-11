@@ -3,17 +3,31 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
+import { groupKey, InvoiceDTO as InvDTOFromUtils } from '@/lib/utils';
 
 // Worker de pdf.js
 GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+type InvoiceDTO = {
+  id: string;
+  title: string;
+  createdAt: string;
+  total: number | null;
+  proveedor?: string | null;
+  folio?: string | null;
+  folderName?: string | null;
+};
 
 function normalizeSpaces(s: string) {
   return s.replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim();
 }
 function toNumberMoney(input?: string) {
   if (!input) return undefined;
-  const clean = input.replace(/[^\d,.\-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+  const clean = input
+    .replace(/[^\d,.\-]/g, '')
+    .replace(/\.(?=\d{3}(\D|$))/g, '')
+    .replace(',', '.');
   const n = Number(clean);
   return Number.isFinite(n) ? n : undefined;
 }
@@ -24,7 +38,9 @@ function toDateMaybe(s?: string): string | undefined {
     const d = +m1[1];
     const y = +m1[3];
     const months: Record<string, number> = {
-      enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12
+      enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
+      julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10,
+      noviembre: 11, diciembre: 12
     };
     const mo = months[m1[2].toLowerCase()] || 0;
     if (mo) {
@@ -90,12 +106,11 @@ async function extractInBrowser(file: File) {
       /\bNo\.?\s*([0-9]{1,10})\b/i,
     ]) || undefined;
 
-  const fechaStr =
-    matchOne([
-      /Fecha\s*Emisi[oó]n\s*[:\-]\s*([^\n]+)/i,
-      /\bEmisi[oó]n\s*[:\-]\s*([^\n]+)/i,
-      /Fecha\s*[:\-]\s*([^\n]+)/i,
-    ]);
+  const fechaStr = matchOne([
+    /Fecha\s*Emisi[oó]n\s*[:\-]\s*([^\n]+)/i,
+    /\bEmisi[oó]n\s*[:\-]\s*([^\n]+)/i,
+    /Fecha\s*[:\-]\s*([^\n]+)/i,
+  ]);
   const fechaEmision = toDateMaybe(fechaStr);
 
   const neto  = matchLastNum([/MONTO\s+NETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bNETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bSUBTOTAL\s*[$:]?\s*([0-9\.\,]+)/i]);
@@ -105,8 +120,6 @@ async function extractInBrowser(file: File) {
   return { proveedor, folio, fechaEmision, neto, iva, total };
 }
 
-type Folder = { name: string; count: number };
-
 export default function PdfUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
@@ -115,34 +128,24 @@ export default function PdfUploadPage() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  // carpetas existentes (para "Elegir existente")
+  const [folders, setFolders] = useState<string[]>([]);
+  const [mode, setMode] = useState<'new' | 'auto' | 'existing'>('existing'); // recomendada
+  const [newFolder, setNewFolder] = useState('');
+  const [selectedFolder, setSelectedFolder] = useState('');
+
   const dropRef = useRef<HTMLDivElement>(null);
 
-  // Carpetas existentes para elegir
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [folderMode, setFolderMode] = useState<'auto' | 'existing' | 'new'>('auto');
-  const [folderValue, setFolderValue] = useState<string>(''); // para existing/new
-
   useEffect(() => {
-    // cargar carpetas existentes
     (async () => {
-      try {
-        const res = await fetch('/api/pdf/all', { cache: 'no-store' });
-        const data = (await res.json()) as any[];
-        // construir set de carpetas actuales (manual o por groupKey)
-        const map = new Map<string, number>();
-        for (const inv of data || []) {
-          const manual = inv.folder?.trim();
-          const name = manual && manual.length > 0 ? manual : (inv.title || '').trim();
-          // usamos groupKey en el backend para carpeta automática, pero aquí solo queremos nombres visibles:
-          const key = manual && manual.length > 0 ? manual : name;
-          map.set(key, (map.get(key) || 0) + 1);
-        }
-        const arr: Folder[] = Array.from(map.entries())
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 100);
-        setFolders(arr);
-      } catch {}
+      const res = await fetch('/api/pdf/all', { cache: 'no-store' });
+      const data: InvoiceDTO[] = await res.json();
+      const set = new Set<string>();
+      for (const d of data) {
+        set.add(groupKey(d as unknown as InvDTOFromUtils)); // usa groupKey real
+      }
+      setFolders(Array.from(set).sort((a, b) => a.localeCompare(b)));
     })();
   }, []);
 
@@ -176,30 +179,31 @@ export default function PdfUploadPage() {
     if (!file) return setError('Selecciona un archivo PDF antes de continuar.');
     if (!name.trim()) return setError('Debes ingresar un título para la factura.');
 
-    // Validar carpeta si es necesario
-    let folderToSend: string | null = null;
-    if (folderMode === 'existing') {
-      if (!folderValue.trim()) return setError('Selecciona una carpeta existente.');
-      folderToSend = folderValue.trim();
-    } else if (folderMode === 'new') {
-      if (!folderValue.trim()) return setError('Ingresa el nombre de la nueva carpeta.');
-      folderToSend = folderValue.trim();
-    }
-    // 'auto' => null (el backend/no envío -> se agrupará con tu estandarización)
+    // validación simple de modos
+    if (mode === 'existing' && !selectedFolder) return setError('Elige una carpeta existente.');
+    if (mode === 'new' && !newFolder.trim()) return setError('Ingresa el nombre de la carpeta nueva.');
+
+    // Carpeta a enviar (o null si automática)
+    const folderName =
+      mode === 'existing' ? selectedFolder.trim()
+      : mode === 'new' ? newFolder.trim()
+      : '';
 
     setLoading(true);
     setProgress(15);
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('name', name.trim());
+      formData.append('name', name.trim());        // <— TÍTULO NO SE PREFIJA
+      formData.append('folderMode', mode);         // <— para el backend
+      if (folderName) formData.append('folderName', folderName);
+
       if (meta?.proveedor) formData.append('proveedor', meta.proveedor);
       if (meta?.folio) formData.append('folio', meta.folio);
       if (meta?.fechaEmision) formData.append('fechaEmision', meta.fechaEmision);
       if (typeof meta?.neto === 'number') formData.append('neto', String(meta.neto));
       if (typeof meta?.iva === 'number') formData.append('iva', String(meta.iva));
       if (typeof meta?.total === 'number') formData.append('total', String(meta.total));
-      if (folderToSend) formData.append('folder', folderToSend); // ✅ solo si es manual
 
       setProgress(45);
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
@@ -220,7 +224,10 @@ export default function PdfUploadPage() {
 
   return (
     <div className="container py-4">
-      <h2 className="fw-bold text-primary mb-3">📤 Subir nueva factura PDF</h2>
+      <div className="d-flex align-items-center gap-2 mb-3">
+        <i className="bi bi-cloud-arrow-up fs-4 text-primary"></i>
+        <h2 className="fw-bold text-primary m-0">Subir nueva factura PDF</h2>
+      </div>
 
       <div className="bg-white p-4 rounded-4 shadow-sm">
         {/* Dropzone */}
@@ -265,95 +272,101 @@ export default function PdfUploadPage() {
             />
           </div>
 
-          {/* Carpeta: modo */}
-          <div className="col-md-6">
+          {/* Radios carpeta - orden: Crear nueva | Automática | Elegir existente (recomendada) */}
+          <div className="col-12">
             <label className="form-label fw-semibold">Carpeta</label>
-            <div className="d-flex flex-wrap gap-3">
+            <div className="d-flex flex-wrap gap-3 align-items-center">
               <div className="form-check">
                 <input
                   className="form-check-input"
                   type="radio"
-                  name="folderMode"
-                  id="modeAuto"
-                  checked={folderMode === 'auto'}
-                  onChange={() => setFolderMode('auto')}
+                  id="mode-new"
+                  checked={mode === 'new'}
+                  onChange={() => setMode('new')}
                 />
-                <label className="form-check-label" htmlFor="modeAuto">
-                  Automática (recomendada)
-                </label>
-              </div>
-              <div className="form-check">
-                <input
-                  className="form-check-input"
-                  type="radio"
-                  name="folderMode"
-                  id="modeExisting"
-                  checked={folderMode === 'existing'}
-                  onChange={() => setFolderMode('existing')}
-                />
-                <label className="form-check-label" htmlFor="modeExisting">
-                  Elegir existente
-                </label>
-              </div>
-              <div className="form-check">
-                <input
-                  className="form-check-input"
-                  type="radio"
-                  name="folderMode"
-                  id="modeNew"
-                  checked={folderMode === 'new'}
-                  onChange={() => setFolderMode('new')}
-                />
-                <label className="form-check-label" htmlFor="modeNew">
+                <label className="form-check-label" htmlFor="mode-new">
                   Crear nueva
                 </label>
               </div>
+
+              <div className="form-check">
+                <input
+                  className="form-check-input"
+                  type="radio"
+                  id="mode-auto"
+                  checked={mode === 'auto'}
+                  onChange={() => setMode('auto')}
+                />
+                <label className="form-check-label" htmlFor="mode-auto">
+                  Automática
+                </label>
+              </div>
+
+              <div className="form-check">
+                <input
+                  className="form-check-input"
+                  type="radio"
+                  id="mode-existing"
+                  checked={mode === 'existing'}
+                  onChange={() => setMode('existing')}
+                />
+                <label className="form-check-label" htmlFor="mode-existing">
+                  Elegir existente <span className="text-success">(recomendada)</span>
+                </label>
+              </div>
             </div>
 
-            {/* Selector / input según modo */}
-            {folderMode === 'existing' && (
-              <div className="mt-2">
+            {/* dinámicos según modo */}
+            {mode === 'existing' && (
+              <div className="mt-2" style={{ maxWidth: 380 }}>
                 <select
                   className="form-select"
-                  value={folderValue}
-                  onChange={(e) => setFolderValue(e.target.value)}
-                  disabled={loading}
+                  value={selectedFolder}
+                  onChange={(e) => setSelectedFolder(e.target.value)}
                 >
-                  <option value="">— Selecciona carpeta —</option>
+                  <option value="">Selecciona una carpeta…</option>
                   {folders.map((f) => (
-                    <option key={f.name} value={f.name}>
-                      {f.name} ({f.count})
-                    </option>
+                    <option key={f} value={f}>{f}</option>
                   ))}
                 </select>
+                <div className="form-text">
+                  Se asociará a la carpeta seleccionada (el título permanece tal cual).
+                </div>
               </div>
             )}
 
-            {folderMode === 'new' && (
-              <div className="mt-2">
+            {mode === 'new' && (
+              <div className="mt-2" style={{ maxWidth: 380 }}>
                 <input
                   className="form-control"
-                  placeholder="Nombre nueva carpeta"
-                  value={folderValue}
-                  onChange={(e) => setFolderValue(e.target.value)}
-                  disabled={loading}
+                  placeholder="Nombre de la nueva carpeta"
+                  value={newFolder}
+                  onChange={(e) => setNewFolder(e.target.value)}
                 />
+                <div className="form-text">
+                  Se creará/registrará la carpeta con ese nombre.
+                </div>
               </div>
             )}
 
-            <div className="form-text">
-              En “Automática” no se envía carpeta y el sistema agrupa por tu estandarización (título).
-            </div>
+            {mode === 'auto' && (
+              <div className="form-text">
+                En “Automática” no se envía carpeta y el sistema agrupa por tu estandarización (título).
+              </div>
+            )}
           </div>
 
-          {/* Metadatos detectados */}
+          {/* Metadatos */}
           <div className="col-12">
             <div className="bg-light rounded-3 p-3">
               <div className="fw-semibold mb-2">Metadatos detectados:</div>
               <div className="row g-2 small">
                 <div className="col-sm-4"><strong>Proveedor:</strong> {meta?.proveedor || '—'}</div>
                 <div className="col-sm-4"><strong>Folio:</strong> {meta?.folio || '—'}</div>
-                <div className="col-sm-4"><strong>Emisión:</strong> {meta?.fechaEmision ? new Date(meta.fechaEmision).toLocaleDateString() : '—'}</div>
+                <div className="col-sm-4">
+                  <strong>Emisión:</strong>{' '}
+                  {meta?.fechaEmision ? new Date(meta.fechaEmision).toLocaleDateString() : '—'}
+                </div>
                 <div className="col-sm-4"><strong>Neto:</strong> {typeof meta?.neto === 'number' ? meta.neto.toLocaleString() : '—'}</div>
                 <div className="col-sm-4"><strong>IVA:</strong> {typeof meta?.iva === 'number' ? meta.iva.toLocaleString() : '—'}</div>
                 <div className="col-sm-4"><strong>Total:</strong> {typeof meta?.total === 'number' ? meta.total.toLocaleString() : '—'}</div>
@@ -361,7 +374,11 @@ export default function PdfUploadPage() {
             </div>
           </div>
 
-          {error && <div className="col-12"><div className="alert alert-danger rounded-3">{error}</div></div>}
+          {error && (
+            <div className="col-12">
+              <div className="alert alert-danger rounded-3">{error}</div>
+            </div>
+          )}
 
           {loading && (
             <div className="col-12">
@@ -384,6 +401,7 @@ export default function PdfUploadPage() {
               <h6 className="fw-bold mb-1">✅ PDF subido correctamente</h6>
               <div className="small">
                 <div><strong>Título:</strong> {response.title}</div>
+                <div><strong>Carpeta:</strong> {response.folderName || '(automática por título)'}</div>
                 <div><strong>Subido el:</strong> {new Date(response.createdAt).toLocaleString()}</div>
               </div>
             </div>

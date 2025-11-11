@@ -1,29 +1,41 @@
-// src/lib/ui.ts
-export const slugify = (s: string) =>
-  s
+export const CLP = (n?: number | null) =>
+  typeof n === 'number' ? 'CLP ' + n.toLocaleString('es-CL') : '—';
+
+export function slugify(name: string) {
+  return name
     .toLowerCase()
     .trim()
     .replace(/[^\w\s-]/g, '')
     .replace(/\s+/g, '-')
     .slice(0, 80);
+}
 
-export const CLP = (n?: number | null) =>
-  typeof n === 'number' ? n.toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }) : '—';
+// Estándar por título (legacy)
+export function groupKeyByTitle(title: string) {
+  return (title || 'Sin nombre')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
+}
 
+// DTO común
 export type InvoiceDTO = {
   id: string;
   title: string;
-  url: string;
   createdAt: string;
-  updatedAt?: string;
+  estadoPago: 'pagada' | 'pendiente' | 'anulada' | 'vencida';
+  total: number | null;
   proveedor?: string | null;
   folio?: string | null;
-  neto?: number | null;
-  iva?: number | null;
-  total?: number | null;
-  estadoPago?: 'pagada' | 'pendiente' | 'anulada' | 'vencida';
-  estadoSistema?: 'uploaded' | 'parsed' | 'validated' | 'rejected';
+  folderName?: string | null; // <— NUEVO en front
 };
 
-// agrupa por “carpeta”: preferimos title; si no, proveedor
-export const groupKey = (i: InvoiceDTO) => (i.title?.trim() || i.proveedor?.trim() || 'Sin nombre');
+// Nueva: devuelve el nombre de carpeta real a usar
+export function resolveFolderName(inv: { title: string; folderName?: string | null }) {
+  return (inv.folderName && inv.folderName.trim()) || groupKeyByTitle(inv.title);
+}
+
+// Compatibilidad: groupKey = resolveFolderName sobre el objeto
+export function groupKey(inv: { title: string; folderName?: string | null }) {
+  return resolveFolderName(inv);
+}
