@@ -1,3 +1,4 @@
+// src/models/Pdf.ts
 import mongoose, { Schema, Model } from "mongoose";
 
 export interface IPdf {
@@ -9,6 +10,9 @@ export interface IPdf {
   // Estados de negocio y de proceso
   estadoPago: "pagada" | "pendiente" | "anulada" | "vencida";
   estadoSistema: "uploaded" | "parsed" | "validated" | "rejected";
+
+  // Agrupación / carpeta manual
+  folder?: string | null;
 
   // Metadatos contables mínimos (opcionales)
   folio?: string;
@@ -40,6 +44,8 @@ const PdfSchema = new Schema<IPdf>(
       default: "uploaded"
     },
 
+    folder: { type: String, default: null }, // ✅ carpeta manual
+
     folio: String,
     proveedor: String,
     fechaEmision: Date,
@@ -51,4 +57,5 @@ const PdfSchema = new Schema<IPdf>(
   { timestamps: true }
 );
 
-export const Pdf: Model<IPdf> = mongoose.models.Pdf || mongoose.model<IPdf>("Pdf", PdfSchema);
+export const Pdf: Model<IPdf> =
+  mongoose.models.Pdf || mongoose.model<IPdf>("Pdf", PdfSchema);

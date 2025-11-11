@@ -1,3 +1,4 @@
+// src/app/api/upload/route.ts
 import { put } from '@vercel/blob';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
@@ -15,7 +16,7 @@ function slugify(name: string) {
     .slice(0, 80);
 }
 
-// util para castear números y fechas recibidas como string
+// utils
 function toNum(v: FormDataEntryValue | null) {
   if (v == null) return undefined;
   const s = String(v).trim();
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
     const file = formData.get('file') as File | null;
     const name = (formData.get('name') as string | null)?.trim() || '';
     const uploadedBy = (formData.get('uploadedBy') as string | null) || undefined;
+    const folder = (formData.get('folder') as string | null)?.trim() || null; // ✅ carpeta manual
 
     if (!file) return NextResponse.json({ error: 'Archivo no recibido' }, { status: 400 });
     if (!name) return NextResponse.json({ error: 'Nombre no recibido' }, { status: 400 });
@@ -52,13 +54,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'El PDF supera 25MB' }, { status: 413 });
     }
 
-    // ⬇️ lee campos opcionales parseados en el cliente
+    // campos opcionales parseados
     const proveedor = (formData.get('proveedor') as string | null)?.trim() || undefined;
     const folio     = (formData.get('folio') as string | null)?.trim() || undefined;
     const neto      = toNum(formData.get('neto'));
     const iva       = toNum(formData.get('iva'));
     const total     = toNum(formData.get('total'));
-    const fechaEmision = toDate(formData.get('fechaEmision')); // ISO string desde el cliente
+    const fechaEmision = toDate(formData.get('fechaEmision'));
 
     // sube a Blob
     const arrayBuffer = await file.arrayBuffer();
@@ -68,13 +70,12 @@ export async function POST(req: Request) {
     const blob = await put(objectName, arrayBuffer, {
       access: 'public',
       contentType: 'application/pdf',
-      addRandomSuffix: false, // opcional, mantiene nombre limpio
+      addRandomSuffix: false,
       cacheControlMaxAge: 60 * 60 * 24 * 365,
     });
 
     await connectToDatabase();
 
-    // si llegó cualquier dato parseado → parsed, si no → uploaded
     const estadoSistema: 'uploaded' | 'parsed' | 'validated' | 'rejected' =
       proveedor || folio || neto != null || iva != null || total != null || fechaEmision
         ? 'parsed'
@@ -86,6 +87,7 @@ export async function POST(req: Request) {
       uploadedBy,
       estadoPago: 'pendiente',
       estadoSistema,
+      folder, // ✅ si llega, se guarda
       proveedor,
       folio,
       neto,
@@ -101,6 +103,7 @@ export async function POST(req: Request) {
       uploadedBy: doc.uploadedBy || null,
       estadoPago: doc.estadoPago,
       estadoSistema: doc.estadoSistema,
+      folder: doc.folder || null,
       proveedor: doc.proveedor || null,
       folio: doc.folio || null,
       neto: typeof doc.neto === 'number' ? doc.neto : null,

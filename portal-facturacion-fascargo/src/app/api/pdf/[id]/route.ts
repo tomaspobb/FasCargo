@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// ✅ PATCH: actualizar estadoPago y/o título
+// ✅ PATCH: actualizar estadoPago, título o carpeta
 export async function PATCH(req: Request, { params }: any) {
   try {
     await connectToDatabase();
@@ -16,15 +16,30 @@ export async function PATCH(req: Request, { params }: any) {
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
 
     const update: any = {};
+
+    // título
     if (typeof body.title === 'string' && body.title.trim()) {
       update.title = body.title.trim();
     }
+
+    // estadoPago
     if (typeof body.estadoPago === 'string') {
       const ok = ['pagada', 'pendiente', 'anulada', 'vencida'];
       if (!ok.includes(body.estadoPago)) {
         return NextResponse.json({ error: 'estadoPago inválido' }, { status: 400 });
       }
       update.estadoPago = body.estadoPago;
+    }
+
+    // carpeta
+    if (body.folder !== undefined) {
+      if (body.folder === null || body.folder === '') {
+        update.folder = null;
+      } else if (typeof body.folder === 'string') {
+        update.folder = body.folder.trim().slice(0, 120);
+      } else {
+        return NextResponse.json({ error: 'folder inválido' }, { status: 400 });
+      }
     }
 
     if (!Object.keys(update).length) {
@@ -40,6 +55,7 @@ export async function PATCH(req: Request, { params }: any) {
       url: doc.url,
       estadoPago: doc.estadoPago,
       estadoSistema: doc.estadoSistema,
+      folder: doc.folder || null,
       proveedor: doc.proveedor ?? null,
       folio: doc.folio ?? null,
       fechaEmision: doc.fechaEmision ?? null,
@@ -62,7 +78,7 @@ export async function DELETE(req: Request, { params }: any) {
     const id = params?.id as string | undefined;
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
 
-    // 🔐 Autorización por correo (cabecera enviada desde el cliente)
+    // 🔐 Autorización por correo
     const adminEmails = ['topoblete@alumnos.uai.cl', 'fascargo.chile.spa@gmail.com'];
     const requester = (req.headers.get('x-user-email') || '').trim().toLowerCase();
     if (!adminEmails.includes(requester)) {
@@ -72,7 +88,7 @@ export async function DELETE(req: Request, { params }: any) {
     const deleted = await Pdf.findByIdAndDelete(id);
     if (!deleted) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
 
-    // Intenta borrar el blob (si existe)
+    // eliminar blob
     try {
       const blobPath = new URL(deleted.url).pathname.slice(1); // sin "/"
       await del(blobPath);

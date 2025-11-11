@@ -1,6 +1,7 @@
+// src/app/facturas/subir/page.tsx
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 
 // Worker de pdf.js
@@ -75,23 +76,26 @@ async function extractInBrowser(file: File) {
     return undefined;
   };
 
-  const proveedor = matchOne([
-    /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+R\.?U\.?T\.?/i,
-    /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+FACTURA\s+ELECTRONICA/i,
-    /(?:raz[oó]n\s+social|emisor|proveedor)\s*[:\-]\s*([^\n]+)/i,
-  ]) || undefined;
+  const proveedor =
+    matchOne([
+      /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+R\.?U\.?T\.?/i,
+      /([A-ZÁÉÍÓÚÑ0-9\.\-& ]{3,})\s+FACTURA\s+ELECTRONICA/i,
+      /(?:raz[oó]n\s+social|emisor|proveedor)\s*[:\-]\s*([^\n]+)/i,
+    ]) || undefined;
 
-  const folio = matchOne([
-    /FACTURA\s+ELECTRONICA\s*(?:N[°º#]\s*|No\.?\s*)?([0-9]{1,10})/i,
-    /\bN[°º#]\s*([0-9]{1,10})\b/i,
-    /\bNo\.?\s*([0-9]{1,10})\b/i,
-  ]) || undefined;
+  const folio =
+    matchOne([
+      /FACTURA\s+ELECTRONICA\s*(?:N[°º#]\s*|No\.?\s*)?([0-9]{1,10})/i,
+      /\bN[°º#]\s*([0-9]{1,10})\b/i,
+      /\bNo\.?\s*([0-9]{1,10})\b/i,
+    ]) || undefined;
 
-  const fechaStr = matchOne([
-    /Fecha\s*Emisi[oó]n\s*[:\-]\s*([^\n]+)/i,
-    /\bEmisi[oó]n\s*[:\-]\s*([^\n]+)/i,
-    /Fecha\s*[:\-]\s*([^\n]+)/i,
-  ]);
+  const fechaStr =
+    matchOne([
+      /Fecha\s*Emisi[oó]n\s*[:\-]\s*([^\n]+)/i,
+      /\bEmisi[oó]n\s*[:\-]\s*([^\n]+)/i,
+      /Fecha\s*[:\-]\s*([^\n]+)/i,
+    ]);
   const fechaEmision = toDateMaybe(fechaStr);
 
   const neto  = matchLastNum([/MONTO\s+NETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bNETO\s*[$:]?\s*([0-9\.\,]+)/i, /\bSUBTOTAL\s*[$:]?\s*([0-9\.\,]+)/i]);
@@ -100,6 +104,8 @@ async function extractInBrowser(file: File) {
 
   return { proveedor, folio, fechaEmision, neto, iva, total };
 }
+
+type Folder = { name: string; count: number };
 
 export default function PdfUploadPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -110,6 +116,35 @@ export default function PdfUploadPage() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const dropRef = useRef<HTMLDivElement>(null);
+
+  // Carpetas existentes para elegir
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folderMode, setFolderMode] = useState<'auto' | 'existing' | 'new'>('auto');
+  const [folderValue, setFolderValue] = useState<string>(''); // para existing/new
+
+  useEffect(() => {
+    // cargar carpetas existentes
+    (async () => {
+      try {
+        const res = await fetch('/api/pdf/all', { cache: 'no-store' });
+        const data = (await res.json()) as any[];
+        // construir set de carpetas actuales (manual o por groupKey)
+        const map = new Map<string, number>();
+        for (const inv of data || []) {
+          const manual = inv.folder?.trim();
+          const name = manual && manual.length > 0 ? manual : (inv.title || '').trim();
+          // usamos groupKey en el backend para carpeta automática, pero aquí solo queremos nombres visibles:
+          const key = manual && manual.length > 0 ? manual : name;
+          map.set(key, (map.get(key) || 0) + 1);
+        }
+        const arr: Folder[] = Array.from(map.entries())
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 100);
+        setFolders(arr);
+      } catch {}
+    })();
+  }, []);
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
@@ -141,6 +176,17 @@ export default function PdfUploadPage() {
     if (!file) return setError('Selecciona un archivo PDF antes de continuar.');
     if (!name.trim()) return setError('Debes ingresar un título para la factura.');
 
+    // Validar carpeta si es necesario
+    let folderToSend: string | null = null;
+    if (folderMode === 'existing') {
+      if (!folderValue.trim()) return setError('Selecciona una carpeta existente.');
+      folderToSend = folderValue.trim();
+    } else if (folderMode === 'new') {
+      if (!folderValue.trim()) return setError('Ingresa el nombre de la nueva carpeta.');
+      folderToSend = folderValue.trim();
+    }
+    // 'auto' => null (el backend/no envío -> se agrupará con tu estandarización)
+
     setLoading(true);
     setProgress(15);
     try {
@@ -153,6 +199,7 @@ export default function PdfUploadPage() {
       if (typeof meta?.neto === 'number') formData.append('neto', String(meta.neto));
       if (typeof meta?.iva === 'number') formData.append('iva', String(meta.iva));
       if (typeof meta?.total === 'number') formData.append('total', String(meta.total));
+      if (folderToSend) formData.append('folder', folderToSend); // ✅ solo si es manual
 
       setProgress(45);
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
@@ -218,7 +265,88 @@ export default function PdfUploadPage() {
             />
           </div>
 
-        {/* Metadatos */}
+          {/* Carpeta: modo */}
+          <div className="col-md-6">
+            <label className="form-label fw-semibold">Carpeta</label>
+            <div className="d-flex flex-wrap gap-3">
+              <div className="form-check">
+                <input
+                  className="form-check-input"
+                  type="radio"
+                  name="folderMode"
+                  id="modeAuto"
+                  checked={folderMode === 'auto'}
+                  onChange={() => setFolderMode('auto')}
+                />
+                <label className="form-check-label" htmlFor="modeAuto">
+                  Automática (recomendada)
+                </label>
+              </div>
+              <div className="form-check">
+                <input
+                  className="form-check-input"
+                  type="radio"
+                  name="folderMode"
+                  id="modeExisting"
+                  checked={folderMode === 'existing'}
+                  onChange={() => setFolderMode('existing')}
+                />
+                <label className="form-check-label" htmlFor="modeExisting">
+                  Elegir existente
+                </label>
+              </div>
+              <div className="form-check">
+                <input
+                  className="form-check-input"
+                  type="radio"
+                  name="folderMode"
+                  id="modeNew"
+                  checked={folderMode === 'new'}
+                  onChange={() => setFolderMode('new')}
+                />
+                <label className="form-check-label" htmlFor="modeNew">
+                  Crear nueva
+                </label>
+              </div>
+            </div>
+
+            {/* Selector / input según modo */}
+            {folderMode === 'existing' && (
+              <div className="mt-2">
+                <select
+                  className="form-select"
+                  value={folderValue}
+                  onChange={(e) => setFolderValue(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="">— Selecciona carpeta —</option>
+                  {folders.map((f) => (
+                    <option key={f.name} value={f.name}>
+                      {f.name} ({f.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {folderMode === 'new' && (
+              <div className="mt-2">
+                <input
+                  className="form-control"
+                  placeholder="Nombre nueva carpeta"
+                  value={folderValue}
+                  onChange={(e) => setFolderValue(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            )}
+
+            <div className="form-text">
+              En “Automática” no se envía carpeta y el sistema agrupa por tu estandarización (título).
+            </div>
+          </div>
+
+          {/* Metadatos detectados */}
           <div className="col-12">
             <div className="bg-light rounded-3 p-3">
               <div className="fw-semibold mb-2">Metadatos detectados:</div>
