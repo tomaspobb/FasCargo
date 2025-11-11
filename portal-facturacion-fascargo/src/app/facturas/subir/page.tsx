@@ -143,7 +143,7 @@ export default function PdfUploadPage() {
       const data: InvoiceDTO[] = await res.json();
       const set = new Set<string>();
       for (const d of data) {
-        set.add(groupKey(d as unknown as InvDTOFromUtils)); // usa groupKey real
+        set.add(groupKey(d as unknown as InvDTOFromUtils));
       }
       setFolders(Array.from(set).sort((a, b) => a.localeCompare(b)));
     })();
@@ -179,11 +179,9 @@ export default function PdfUploadPage() {
     if (!file) return setError('Selecciona un archivo PDF antes de continuar.');
     if (!name.trim()) return setError('Debes ingresar un título para la factura.');
 
-    // validación simple de modos
     if (mode === 'existing' && !selectedFolder) return setError('Elige una carpeta existente.');
     if (mode === 'new' && !newFolder.trim()) return setError('Ingresa el nombre de la carpeta nueva.');
 
-    // Carpeta a enviar (o null si automática)
     const folderName =
       mode === 'existing' ? selectedFolder.trim()
       : mode === 'new' ? newFolder.trim()
@@ -194,8 +192,8 @@ export default function PdfUploadPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('name', name.trim());        // <— TÍTULO NO SE PREFIJA
-      formData.append('folderMode', mode);         // <— para el backend
+      formData.append('name', name.trim());        // título tal cual
+      formData.append('folderMode', mode);         // informa modo de carpeta
       if (folderName) formData.append('folderName', folderName);
 
       if (meta?.proveedor) formData.append('proveedor', meta.proveedor);
@@ -272,7 +270,7 @@ export default function PdfUploadPage() {
             />
           </div>
 
-          {/* Radios carpeta - orden: Crear nueva | Automática | Elegir existente (recomendada) */}
+          {/* Carpeta: Crear nueva | Automática | Elegir existente (recomendada) */}
           <div className="col-12">
             <label className="form-label fw-semibold">Carpeta</label>
             <div className="d-flex flex-wrap gap-3 align-items-center">
@@ -316,7 +314,6 @@ export default function PdfUploadPage() {
               </div>
             </div>
 
-            {/* dinámicos según modo */}
             {mode === 'existing' && (
               <div className="mt-2" style={{ maxWidth: 380 }}>
                 <select

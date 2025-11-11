@@ -1,3 +1,4 @@
+// src/app/api/upload/route.ts
 import { put } from '@vercel/blob';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
       title: name,
       url: blob.url,
       uploadedBy,
-      folderName, // <— guarda la carpeta elegida/creada, o null si auto
+      folderName, // guarda carpeta elegida/creada, o null si automática
       estadoPago: 'pendiente',
       estadoSistema,
       proveedor,

@@ -7,6 +7,18 @@ import { useSearchParams } from 'next/navigation';
 import Kpi from '@/components/Kpi';
 import { CLP, InvoiceDTO, groupKey } from '@/lib/utils';
 
+// ---- Tipos locales para compatibilizar con InvoiceDTO ----
+type Moneyish = {
+  neto?: number | null;
+  iva?: number | null;
+  total?: number | null;
+  folio?: string | null;
+  proveedor?: string | null;
+  estadoPago?: 'pagada' | 'pendiente' | 'anulada' | 'vencida' | string;
+};
+
+const asMoneyish = (x: InvoiceDTO): InvoiceDTO & Moneyish => x as any;
+
 const monthToRange = (m: string) => {
   // m = 'YYYY-MM'
   const [y, mm] = m.split('-').map(Number);
@@ -46,16 +58,18 @@ export default function FolderDetailPage() {
   const items = useMemo(() => {
     let arr = all.filter((i) => groupKey(i) === folderName);
 
-    if (status !== 'Todas') arr = arr.filter((i) => i.estadoPago === status);
+    if (status !== 'Todas') arr = arr.filter((i) => asMoneyish(i).estadoPago === status);
 
     if (q.trim()) {
       const term = q.trim().toLowerCase();
-      arr = arr.filter(
-        (i) =>
-          (i.title || '').toLowerCase().includes(term) ||
-          (i.folio || '').toLowerCase().includes(term) ||
-          (i.proveedor || '').toLowerCase().includes(term),
-      );
+      arr = arr.filter((i) => {
+        const ii = asMoneyish(i);
+        return (
+          (ii.title || '').toLowerCase().includes(term) ||
+          (ii.folio || '').toLowerCase().includes(term) ||
+          (ii.proveedor || '').toLowerCase().includes(term)
+        );
+      });
     }
 
     if (mFrom) {
@@ -72,10 +86,10 @@ export default function FolderDetailPage() {
         arr.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
         break;
       case 'monto-desc':
-        arr.sort((a, b) => (b.total || 0) - (a.total || 0));
+        arr.sort((a, b) => (asMoneyish(b).total || 0) - (asMoneyish(a).total || 0));
         break;
       case 'monto-asc':
-        arr.sort((a, b) => (a.total || 0) - (b.total || 0));
+        arr.sort((a, b) => (asMoneyish(a).total || 0) - (asMoneyish(b).total || 0));
         break;
       default:
         arr.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
@@ -91,9 +105,9 @@ export default function FolderDetailPage() {
 
   // KPIs (si hay selección, usa selección)
   const base = selItems.length ? selItems : items;
-  const kNeto = sum(base.map((i) => i.neto));
-  const kIva = sum(base.map((i) => i.iva));
-  const kTotal = sum(base.map((i) => i.total));
+  const kNeto  = sum(base.map((i) => asMoneyish(i).neto));
+  const kIva   = sum(base.map((i) => asMoneyish(i).iva));
+  const kTotal = sum(base.map((i) => asMoneyish(i).total));
 
   const allChecked = items.length > 0 && selectedIds.size === items.length;
   const toggleAll = () => {
@@ -113,29 +127,30 @@ export default function FolderDetailPage() {
 
   // -------- Exportar a Excel (.xlsx) --------
   const exportXlsx = async (onlySelection = false) => {
-    const rows = (onlySelection && selItems.length ? selItems : items).map((r) => ({
-      Título: r.title ?? '',
-      Carpeta: groupKey(r),
-      Folio: r.folio ?? '',
-      Proveedor: r.proveedor ?? '',
-      Estado: r.estadoPago ?? '',
-      Neto: r.neto ?? null,
-      IVA: r.iva ?? null,
-      Total: r.total ?? null,
-      Subida: new Date(r.createdAt).toLocaleString(),
-      SubidaISO: r.createdAt,
-    }));
+    const rows = (onlySelection && selItems.length ? selItems : items).map((r) => {
+      const rr = asMoneyish(r);
+      return {
+        Título: rr.title ?? '',
+        Carpeta: groupKey(rr),
+        Folio: rr.folio ?? '',
+        Proveedor: rr.proveedor ?? '',
+        Estado: rr.estadoPago ?? '',
+        Neto: rr.neto ?? null,
+        IVA: rr.iva ?? null,
+        Total: rr.total ?? null,
+        Subida: new Date(rr.createdAt).toLocaleString(),
+        SubidaISO: rr.createdAt,
+      };
+    });
 
     const XLSX = await import('xlsx'); // carga dinámica para cliente
     const ws = XLSX.utils.json_to_sheet(rows);
 
-    // auto-width por columna (calculado por longitud de celdas)
-    const cols = Object.keys(rows[0] ?? { Título: '' }).map((k) => {
-      const maxLen = Math.max(
-        k.length,
-        ...rows.map((r) => String((r as any)[k] ?? '').length),
-      );
-      return { wch: Math.min(Math.max(maxLen + 2, 10), 40) }; // ancho entre 10 y 40
+    // auto-width por columna
+    const keys = Object.keys(rows[0] ?? { Título: '' });
+    const cols = keys.map((k) => {
+      const maxLen = Math.max(k.length, ...rows.map((r) => String((r as any)[k] ?? '').length));
+      return { wch: Math.min(Math.max(maxLen + 2, 10), 40) };
     });
     (ws as any)['!cols'] = cols;
 
@@ -274,6 +289,7 @@ export default function FolderDetailPage() {
       {/* Listado */}
       <div className="row g-4">
         {items.map((f) => {
+          const ff = asMoneyish(f);
           const checked = selectedIds.has(f.id);
           return (
             <div key={f.id} className="col-lg-6">
@@ -287,37 +303,37 @@ export default function FolderDetailPage() {
                         checked={checked}
                         onChange={() => toggleOne(f.id)}
                       />
-                      <h5 className="card-title fw-semibold m-0">{f.title}</h5>
+                      <h5 className="card-title fw-semibold m-0">{ff.title}</h5>
                     </div>
                     <span
                       className={`badge rounded-pill ${
-                        f.estadoPago === 'pagada'
+                        ff.estadoPago === 'pagada'
                           ? 'bg-success'
-                          : f.estadoPago === 'pendiente'
+                          : ff.estadoPago === 'pendiente'
                           ? 'bg-warning text-dark'
-                          : f.estadoPago === 'vencida'
+                          : ff.estadoPago === 'vencida'
                           ? 'bg-danger'
                           : 'bg-secondary'
                       }`}
                     >
-                      {f.estadoPago || '—'}
+                      {ff.estadoPago || '—'}
                     </span>
                   </div>
 
                   <div className="text-muted small mt-2">
-                    <div><strong>Folio:</strong> {f.folio || '—'}</div>
-                    <div><strong>Proveedor:</strong> {f.proveedor || '—'}</div>
-                    <div><strong>Subida:</strong> {new Date(f.createdAt).toLocaleString()}</div>
+                    <div><strong>Folio:</strong> {ff.folio || '—'}</div>
+                    <div><strong>Proveedor:</strong> {ff.proveedor || '—'}</div>
+                    <div><strong>Subida:</strong> {new Date(ff.createdAt).toLocaleString()}</div>
                   </div>
 
                   <div className="mt-2 small">
-                    <span className="me-3"><strong>Neto:</strong> {CLP(f.neto)}</span>
-                    <span className="me-3"><strong>IVA:</strong> {CLP(f.iva)}</span>
-                    <span><strong>Total:</strong> {CLP(f.total)}</span>
+                    <span className="me-3"><strong>Neto:</strong> {CLP(ff.neto)}</span>
+                    <span className="me-3"><strong>IVA:</strong> {CLP(ff.iva)}</span>
+                    <span><strong>Total:</strong> {CLP(ff.total)}</span>
                   </div>
 
                   <div className="mt-3">
-                    <Link href={`/facturas/${f.id}`} className="btn btn-outline-primary rounded-pill">
+                    <Link href={`/facturas/${ff.id}`} className="btn btn-outline-primary rounded-pill">
                       Ver factura
                     </Link>
                   </div>
