@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import DeleteUserButton from '@/components/users/DeleteUserButton';
 import { isAdminEmail } from '@/constants/admins';
+import { useAuth } from '@/context/AuthContext';
 
 type UserRow = {
   userId: string;
@@ -14,8 +15,29 @@ type UserRow = {
 };
 
 export default function UsersPage() {
+  const { email } = useAuth();
+
+  // ⬇️ NUEVO: control de acceso
+  const [ready, setReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Resolvemos admin usando AuthContext y fallback a localStorage (por si tarda en hidratar)
+    let e = email || '';
+    if (!e) {
+      try {
+        const saved = localStorage.getItem('email');
+        if (saved) e = saved;
+      } catch {
+        // ignore
+      }
+    }
+    setIsAdmin(isAdminEmail(e));
+    setReady(true);
+  }, [email]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -29,9 +51,36 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    // Solo cargar usuarios si ya sabemos que es admin
+    if (ready && isAdmin) {
+      fetchUsers();
+    }
+  }, [ready, isAdmin]);
 
+  // Loading inicial mientras resolvemos si es admin
+  if (!ready) {
+    return (
+      <div className="container py-4">
+        <div className="alert alert-info">Cargando…</div>
+      </div>
+    );
+  }
+
+  // Bloqueo para no-admin (no se hace fetch)
+  if (!isAdmin) {
+    return (
+      <div className="container py-4">
+        <div className="alert alert-danger rounded-4 shadow-sm">
+          <h5 className="mb-1">403 — Acceso restringido</h5>
+          <div className="small">
+            Esta sección es solo para administradores.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ======= CONTENIDO SOLO ADMIN =======
   return (
     <div className="container py-4">
       <div className="d-flex align-items-center gap-2 mb-4">
@@ -66,9 +115,15 @@ export default function UsersPage() {
 
                   <div className="text-muted small mb-3">
                     <div><strong>ID:</strong> {u.userId}</div>
-                    {u.lastLoginAt && <div><strong>Último login:</strong> {new Date(u.lastLoginAt).toLocaleString()}</div>}
-                    {u.createdAt && <div><strong>Creado:</strong> {new Date(u.createdAt).toLocaleString()}</div>}
-                    {u.updatedAt && <div><strong>Actualizado:</strong> {new Date(u.updatedAt).toLocaleString()}</div>}
+                    {u.lastLoginAt && (
+                      <div><strong>Último login:</strong> {new Date(u.lastLoginAt).toLocaleString()}</div>
+                    )}
+                    {u.createdAt && (
+                      <div><strong>Creado:</strong> {new Date(u.createdAt).toLocaleString()}</div>
+                    )}
+                    {u.updatedAt && (
+                      <div><strong>Actualizado:</strong> {new Date(u.updatedAt).toLocaleString()}</div>
+                    )}
                   </div>
 
                   <div className="mt-auto d-flex justify-content-start">

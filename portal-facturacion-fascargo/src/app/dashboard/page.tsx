@@ -1,8 +1,10 @@
+// src/app/dashboard/page.tsx
 'use client';
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { isAdminEmail } from '@/lib/admin'; // ⬅️ se usa para detectar admin
 
 type Invoice = {
   id: string;
@@ -37,6 +39,17 @@ export default function DashboardPage() {
       return nameFromEmail(e);
     } catch {
       return 'Usuario';
+    }
+  }, [email]);
+
+  // Flag admin con fallback a localStorage
+  const isAdmin = useMemo(() => {
+    if (email) return isAdminEmail(email);
+    try {
+      const e = localStorage.getItem('email');
+      return isAdminEmail(e);
+    } catch {
+      return false;
     }
   }, [email]);
 
@@ -77,9 +90,12 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [items]);
 
+  // ⬇️ NUEVO: clase de columna responsiva según sea admin (3 tarjetas) o no (2 tarjetas mitad/mitad)
+  const cardColClass = isAdmin ? 'col-12 col-lg-4' : 'col-12 col-lg-6';
+
   return (
     <div className="container py-4">
-      {/* Hero limpio, sin botones duplicados */}
+      {/* Hero */}
       <section className="rounded-4 bg-dashboard-hero p-4 p-md-5 mb-4 text-center shadow-sm">
         <h1 className="display-6 fw-bold mb-2">
           Bienvenido, <span className="text-primary">{userName}</span>
@@ -89,7 +105,7 @@ export default function DashboardPage() {
         </p>
       </section>
 
-      {/* KPIs (más protagonistas) */}
+      {/* KPIs */}
       <section className="row g-3 mb-4">
         <div className="col-6 col-md-3">
           <div className="stat-card py-4">
@@ -117,9 +133,9 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Tarjetas funcionales (con sus CTAs) */}
+      {/* Tarjetas funcionales */}
       <section className="row g-3 mb-4">
-        <div className="col-12 col-lg-4">
+        <div className={cardColClass}>
           <div className="card border-0 shadow-sm rounded-4 h-100">
             <div className="card-body">
               <div className="d-flex align-items-center gap-2 mb-2">
@@ -136,7 +152,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="col-12 col-lg-4">
+        <div className={cardColClass}>
           <div className="card border-0 shadow-sm rounded-4 h-100">
             <div className="card-body">
               <div className="d-flex align-items-center gap-2 mb-2">
@@ -156,22 +172,25 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="col-12 col-lg-4">
-          <div className="card border-0 shadow-sm rounded-4 h-100">
-            <div className="card-body">
-              <div className="d-flex align-items-center gap-2 mb-2">
-                <i className="bi bi-shield-lock fs-4 text-secondary"></i>
-                <h5 className="m-0">Gestión de dispositivos</h5>
+        {/* Solo admins ven esta tercera tarjeta */}
+        {isAdmin && (
+          <div className="col-12 col-lg-4">
+            <div className="card border-0 shadow-sm rounded-4 h-100">
+              <div className="card-body">
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <i className="bi bi-shield-lock fs-4 text-secondary"></i>
+                  <h5 className="m-0">Gestión de dispositivos</h5>
+                </div>
+                <p className="text-muted small mb-3">
+                  Solo administradores gestionan dispositivos y acciones sensibles.
+                </p>
+                <Link href="/users" className="btn btn-outline-secondary btn-sm rounded-pill">
+                  Gestionar dispositivos
+                </Link>
               </div>
-              <p className="text-muted small mb-3">
-                Solo administradores gestionan dispositivos y acciones sensibles.
-              </p>
-              <Link href="/users" className="btn btn-outline-secondary btn-sm rounded-pill">
-                Gestionar dispositivos
-              </Link>
             </div>
           </div>
-        </div>
+        )}
       </section>
 
       {/* Top Proveedores */}
