@@ -3,8 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
-
-const ADMIN_EMAILS = ['topoblete@alumnos.uai.cl', 'fascargo.chile.spa@gmail.com'];
+import { isAdminEmail } from '@/lib/admin';
 
 type UserApi = { email?: string | null };
 
@@ -25,31 +24,46 @@ export default function NavbarSelector() {
   const [userName, setUserName] = useState<string>('Usuario');
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // —— Cargar usuario (simple) ——
+  // —— Cargar usuario (simple) —— //
   useEffect(() => {
-    const userId = localStorage.getItem('userId');
-    const cachedEmail = localStorage.getItem('email');
-    if (cachedEmail) {
-      setEmail(cachedEmail);
-      setUserName(cachedEmail.split('@')[0]);
-      setIsAdmin(ADMIN_EMAILS.includes(cachedEmail));
-      return;
-    }
-    if (!userId) return;
+    let em = '';
 
-    fetch(`/api/users?userId=${userId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: UserApi | null) => {
-        const em = d?.email ?? '';
-        if (!em) return;
-        setEmail(em);
-        setUserName(em.split('@')[0]);
-        setIsAdmin(ADMIN_EMAILS.includes(em));
+    // 1) intento rápido: localStorage
+    try {
+      const cachedEmail = localStorage.getItem('email');
+      if (cachedEmail) {
+        em = cachedEmail;
+        setEmail(cachedEmail);
+        setUserName(cachedEmail.split('@')[0]);
+        setIsAdmin(isAdminEmail(cachedEmail));
+      }
+    } catch {}
+
+    // 2) fallback: si tengo userId pero no email en cache, pregunto al API
+    if (!em) {
+      const userId = (() => {
         try {
-          localStorage.setItem('email', em);
-        } catch {}
-      })
-      .catch(() => {});
+          return localStorage.getItem('userId') || '';
+        } catch {
+          return '';
+        }
+      })();
+      if (!userId) return;
+
+      fetch(`/api/users?userId=${userId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: UserApi | null) => {
+          const e = d?.email ?? '';
+          if (!e) return;
+          setEmail(e);
+          setUserName(e.split('@')[0]);
+          setIsAdmin(isAdminEmail(e));
+          try {
+            localStorage.setItem('email', e);
+          } catch {}
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const logout = () => {
@@ -61,7 +75,6 @@ export default function NavbarSelector() {
       localStorage.removeItem('sessionVerified');
       localStorage.removeItem('twoFA-verified');
     } catch {}
-    // ✅ redirige a /auth
     window.location.href = '/auth';
   };
 

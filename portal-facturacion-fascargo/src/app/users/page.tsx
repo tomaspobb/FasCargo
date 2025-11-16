@@ -1,9 +1,8 @@
-// src/app/users/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import DeleteUserButton from '@/components/users/DeleteUserButton';
-import { isAdminEmail } from '@/constants/admins';
+import { isAdminEmail } from '@/lib/admin';
 import { useAuth } from '@/context/AuthContext';
 
 type UserRow = {
@@ -17,7 +16,7 @@ type UserRow = {
 export default function UsersPage() {
   const { email } = useAuth();
 
-  // ⬇️ NUEVO: control de acceso
+  // control de acceso
   const [ready, setReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -25,15 +24,13 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Resolvemos admin usando AuthContext y fallback a localStorage (por si tarda en hidratar)
+    // Resolver admin con AuthContext + fallback localStorage
     let e = email || '';
     if (!e) {
       try {
         const saved = localStorage.getItem('email');
         if (saved) e = saved;
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
     setIsAdmin(isAdminEmail(e));
     setReady(true);
@@ -42,22 +39,18 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/users'); // tu endpoint que retorna todos
+      const res = await fetch('/api/users', { cache: 'no-store' });
       const data = await res.json();
-      setUsers(data || []);
+      setUsers(Array.isArray(data) ? data : []);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Solo cargar usuarios si ya sabemos que es admin
-    if (ready && isAdmin) {
-      fetchUsers();
-    }
+    if (ready && isAdmin) fetchUsers();
   }, [ready, isAdmin]);
 
-  // Loading inicial mientras resolvemos si es admin
   if (!ready) {
     return (
       <div className="container py-4">
@@ -66,15 +59,12 @@ export default function UsersPage() {
     );
   }
 
-  // Bloqueo para no-admin (no se hace fetch)
   if (!isAdmin) {
     return (
       <div className="container py-4">
         <div className="alert alert-danger rounded-4 shadow-sm">
           <h5 className="mb-1">403 — Acceso restringido</h5>
-          <div className="small">
-            Esta sección es solo para administradores.
-          </div>
+          <div className="small">Esta sección es solo para administradores.</div>
         </div>
       </div>
     );
@@ -93,7 +83,6 @@ export default function UsersPage() {
       <div className="row g-4">
         {users.map((u) => {
           const admin = isAdminEmail(u.email);
-
           return (
             <div key={u.userId} className="col-lg-4 col-md-6">
               <div className="card shadow-sm border-0 rounded-4 h-100">
@@ -115,15 +104,9 @@ export default function UsersPage() {
 
                   <div className="text-muted small mb-3">
                     <div><strong>ID:</strong> {u.userId}</div>
-                    {u.lastLoginAt && (
-                      <div><strong>Último login:</strong> {new Date(u.lastLoginAt).toLocaleString()}</div>
-                    )}
-                    {u.createdAt && (
-                      <div><strong>Creado:</strong> {new Date(u.createdAt).toLocaleString()}</div>
-                    )}
-                    {u.updatedAt && (
-                      <div><strong>Actualizado:</strong> {new Date(u.updatedAt).toLocaleString()}</div>
-                    )}
+                    {u.lastLoginAt && <div><strong>Último login:</strong> {new Date(u.lastLoginAt).toLocaleString()}</div>}
+                    {u.createdAt && <div><strong>Creado:</strong> {new Date(u.createdAt).toLocaleString()}</div>}
+                    {u.updatedAt && <div><strong>Actualizado:</strong> {new Date(u.updatedAt).toLocaleString()}</div>}
                   </div>
 
                   <div className="mt-auto d-flex justify-content-start">

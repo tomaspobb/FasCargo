@@ -4,7 +4,7 @@
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
-import { useMemo, useState } from 'react';
+import { useState, useMemo } from 'react';
 import { isAdminEmail } from '@/lib/admin';
 
 export function DeletePdfButton({ id }: { id: string }) {
@@ -12,62 +12,36 @@ export function DeletePdfButton({ id }: { id: string }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
 
-  // Admin robusto: usa utilidad centralizada + fallback a localStorage
-  const userEmail = useMemo(() => {
-    if (email) return email.trim().toLowerCase();
-    try {
-      const e = localStorage.getItem('email');
-      return (e || '').trim().toLowerCase();
-    } catch {
-      return '';
-    }
-  }, [email]);
-
-  const isAdmin = useMemo(() => isAdminEmail(userEmail), [userEmail]);
+  const canDelete = useMemo(() => isAdminEmail(email || ''), [email]);
 
   const handleDelete = async () => {
-    if (!confirm('¿Estás seguro de que deseas eliminar esta factura?')) return;
+    if (!confirm('¿Eliminar esta factura?')) return;
     setDeleting(true);
-
     try {
       const res = await fetch(`/api/pdf/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          // El API valida con isAdminEmail(server) sobre este header:
-          'x-user-email': userEmail,
-        },
+        headers: { 'x-user-email': email || '' },
       });
-
       const data = await res.json();
-
-      if (res.ok) {
-        toast.success('✅ Factura eliminada correctamente');
-        // Volver a /facturas para refrescar listado
-        setTimeout(() => router.push('/facturas'), 800);
-      } else {
-        toast.error(`❌ ${data.error || 'Error al eliminar la factura'}`);
-      }
-    } catch {
-      toast.error('❌ Error de conexión con el servidor');
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar');
+      toast.success('✅ Factura eliminada');
+      router.push('/facturas');
+    } catch (e: any) {
+      toast.error(`❌ ${e.message || 'Error de red'}`);
     } finally {
       setDeleting(false);
     }
   };
 
-  // Solo renderiza si es admin
-  if (!isAdmin) return null;
+  if (!canDelete) return null;
 
   return (
     <button
       onClick={handleDelete}
       disabled={deleting}
       className="btn btn-danger rounded-pill px-4 fw-semibold mt-3"
-      aria-disabled={deleting}
-      aria-label="Eliminar factura"
-      title="Eliminar factura"
     >
-      {deleting ? 'Eliminando...' : '🗑️ Eliminar factura'}
+      {deleting ? 'Eliminando…' : '🗑️ Eliminar factura'}
     </button>
   );
 }

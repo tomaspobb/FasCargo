@@ -1,4 +1,3 @@
-// src/app/api/pdf/[id]/route.ts
 import { NextResponse } from 'next/server';
 import { del } from '@vercel/blob';
 import { connectToDatabase } from '@/lib/mongodb';
@@ -14,7 +13,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params; // ⬅️ importante en Next 15
+    const { id } = await params; // Next 15: params es Promise
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
 
     const body = (await req.json().catch(() => ({}))) as {
@@ -32,7 +31,7 @@ export async function PATCH(
       update.title = body.title.trim();
     }
 
-    // folderName: string | null | ''  -> guarda string o null (para limpiar)
+    // folderName (string | null | '')
     if (body.folderName !== undefined) {
       if (body.folderName === null) {
         update.folderName = null;
@@ -42,7 +41,7 @@ export async function PATCH(
       }
     }
 
-    // estadoPago validado
+    // estadoPago (validado)
     if (typeof body.estadoPago === 'string') {
       const ok = ['pagada', 'pendiente', 'anulada', 'vencida'] as const;
       if (!ok.includes(body.estadoPago as any)) {
@@ -90,12 +89,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params; // ⬅️ importante en Next 15
+    const { id } = await params; // Next 15: params es Promise
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
 
     await connectToDatabase();
 
-    // Valida admin a partir de header "x-user-email" (la UI debe enviarlo en llamadas sensibles)
+    // Valida admin a partir de header "x-user-email" (la UI debe enviarlo)
     const requester = (req.headers.get('x-user-email') || '').trim().toLowerCase();
     if (!isAdminEmail(requester)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
