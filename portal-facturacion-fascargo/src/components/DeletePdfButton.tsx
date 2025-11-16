@@ -1,19 +1,29 @@
+// src/components/DeletePdfButton.tsx
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { isAdminEmail } from '@/lib/admin';
 
 export function DeletePdfButton({ id }: { id: string }) {
   const { email } = useAuth();
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
 
-  const ADMIN_EMAILS = [
-    'topoblete@alumnos.uai.cl',
-    'fascargo.chile.spa@gmail.com',
-  ];
+  // Admin robusto: usa utilidad centralizada + fallback a localStorage
+  const userEmail = useMemo(() => {
+    if (email) return email.trim().toLowerCase();
+    try {
+      const e = localStorage.getItem('email');
+      return (e || '').trim().toLowerCase();
+    } catch {
+      return '';
+    }
+  }, [email]);
+
+  const isAdmin = useMemo(() => isAdminEmail(userEmail), [userEmail]);
 
   const handleDelete = async () => {
     if (!confirm('¿Estás seguro de que deseas eliminar esta factura?')) return;
@@ -24,7 +34,8 @@ export function DeletePdfButton({ id }: { id: string }) {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-email': email || '',
+          // El API valida con isAdminEmail(server) sobre este header:
+          'x-user-email': userEmail,
         },
       });
 
@@ -32,7 +43,8 @@ export function DeletePdfButton({ id }: { id: string }) {
 
       if (res.ok) {
         toast.success('✅ Factura eliminada correctamente');
-        setTimeout(() => router.push('/facturas'), 2000);
+        // Volver a /facturas para refrescar listado
+        setTimeout(() => router.push('/facturas'), 800);
       } else {
         toast.error(`❌ ${data.error || 'Error al eliminar la factura'}`);
       }
@@ -43,14 +55,17 @@ export function DeletePdfButton({ id }: { id: string }) {
     }
   };
 
-  // Mostrar solo si el usuario es admin
-  if (!email || !ADMIN_EMAILS.includes(email)) return null;
+  // Solo renderiza si es admin
+  if (!isAdmin) return null;
 
   return (
     <button
       onClick={handleDelete}
       disabled={deleting}
       className="btn btn-danger rounded-pill px-4 fw-semibold mt-3"
+      aria-disabled={deleting}
+      aria-label="Eliminar factura"
+      title="Eliminar factura"
     >
       {deleting ? 'Eliminando...' : '🗑️ Eliminar factura'}
     </button>

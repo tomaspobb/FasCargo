@@ -42,12 +42,12 @@ export default function DashboardPage() {
     }
   }, [email]);
 
-  // Flag admin con fallback a localStorage
+  // Flag admin con fallback a localStorage (robusto frente a refrescos)
   const isAdmin = useMemo(() => {
     if (email) return isAdminEmail(email);
     try {
       const e = localStorage.getItem('email');
-      return isAdminEmail(e);
+      return isAdminEmail(e || undefined);
     } catch {
       return false;
     }
@@ -90,7 +90,7 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [items]);
 
-  // ⬇️ NUEVO: clase de columna responsiva según sea admin (3 tarjetas) o no (2 tarjetas mitad/mitad)
+  // Columna responsiva según sea admin (3 tarjetas) o no (2 tarjetas mitad/mitad)
   const cardColClass = isAdmin ? 'col-12 col-lg-4' : 'col-12 col-lg-6';
 
   return (

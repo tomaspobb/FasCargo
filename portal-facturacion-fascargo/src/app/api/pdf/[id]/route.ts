@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { del } from '@vercel/blob';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
+import { isAdminEmail } from '@/lib/admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,34 +14,38 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { id } = await params; // ⬅️ importante en Next 15
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
 
     const body = (await req.json().catch(() => ({}))) as {
       title?: string;
       folderName?: string | null;
-      estadoPago?: string;
+      estadoPago?: 'pagada' | 'pendiente' | 'anulada' | 'vencida' | string;
     };
 
     await connectToDatabase();
 
     const update: Record<string, any> = {};
 
+    // title (opcional)
     if (typeof body.title === 'string' && body.title.trim()) {
       update.title = body.title.trim();
     }
 
+    // folderName: string | null | ''  -> guarda string o null (para limpiar)
     if (body.folderName !== undefined) {
-      if (body.folderName === null) update.folderName = null;
-      else if (typeof body.folderName === 'string') {
+      if (body.folderName === null) {
+        update.folderName = null;
+      } else if (typeof body.folderName === 'string') {
         const f = body.folderName.trim();
         update.folderName = f || null;
       }
     }
 
+    // estadoPago validado
     if (typeof body.estadoPago === 'string') {
-      const ok = ['pagada', 'pendiente', 'anulada', 'vencida'];
-      if (!ok.includes(body.estadoPago)) {
+      const ok = ['pagada', 'pendiente', 'anulada', 'vencida'] as const;
+      if (!ok.includes(body.estadoPago as any)) {
         return NextResponse.json({ error: 'estadoPago inválido' }, { status: 400 });
       }
       update.estadoPago = body.estadoPago;
@@ -61,7 +66,7 @@ export async function PATCH(
       id: doc._id.toString(),
       title: doc.title,
       url: doc.url,
-      folderName: doc.folderName ?? null, // 👈 vuelve serializado
+      folderName: doc.folderName ?? null,
       estadoPago: doc.estadoPago,
       estadoSistema: doc.estadoSistema,
       proveedor: doc.proveedor ?? null,
@@ -85,24 +90,25 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { id } = await params; // ⬅️ importante en Next 15
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
 
     await connectToDatabase();
 
-    const adminEmails = ['topoblete@alumnos.uai.cl', 'fascargo.chile.spa@gmail.com'];
+    // Valida admin a partir de header "x-user-email" (la UI debe enviarlo en llamadas sensibles)
     const requester = (req.headers.get('x-user-email') || '').trim().toLowerCase();
-    if (!adminEmails.includes(requester)) {
+    if (!isAdminEmail(requester)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 
     const deleted = await Pdf.findByIdAndDelete(id);
     if (!deleted) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
 
+    // Borra el blob; acepta URL completa
     try {
       if (deleted.url) await del(deleted.url);
     } catch (err) {
-      console.warn('⚠️ No se pudo eliminar el blob:', err);
+      console.warn('⚠️ No se pudo eliminar el blob (puede que ya no exista):', err);
     }
 
     return NextResponse.json({ message: 'Factura eliminada correctamente' });

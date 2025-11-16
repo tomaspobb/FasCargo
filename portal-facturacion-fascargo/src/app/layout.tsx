@@ -1,6 +1,8 @@
+// src/app/layout.tsx
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
+import { AdminProvider } from '@/context/AdminContext'; // ⬅️ NUEVO
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import AppFrame from '@/components/AppFrame';
@@ -30,20 +32,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
       <body className="bg-light text-dark d-flex flex-column min-vh-100">
         <AuthProvider>
-          {/* 🔒 AppFrame encapsula guard + navbar/footer condicionales */}
-          <AppFrame>{children}</AppFrame>
+          {/* ⬇️ Inyecta el contexto admin global */}
+          <AdminProvider>
+            {/* 🔒 AppFrame encapsula guard + navbar/footer condicionales */}
+            <AppFrame>{children}</AppFrame>
 
-          {/* ✅ Toasts globales */}
-          <ToastContainer
-            position="bottom-right"
-            autoClose={2500}
-            hideProgressBar={false}
-            newestOnTop={false}
-            closeOnClick
-            pauseOnHover
-            draggable
-            theme="colored"
-          />
+            {/* ✅ Toasts globales */}
+            <ToastContainer
+              position="bottom-right"
+              autoClose={2500}
+              hideProgressBar={false}
+              newestOnTop={false}
+              closeOnClick
+              pauseOnHover
+              draggable
+              theme="colored"
+            />
+          </AdminProvider>
         </AuthProvider>
       </body>
     </html>
