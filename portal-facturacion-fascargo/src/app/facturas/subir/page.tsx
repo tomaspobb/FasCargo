@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import { groupKey, InvoiceDTO as InvDTOFromUtils } from '@/lib/utils';
 
-// Worker de pdf.js
 GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -24,10 +23,7 @@ function normalizeSpaces(s: string) {
 }
 function toNumberMoney(input?: string) {
   if (!input) return undefined;
-  const clean = input
-    .replace(/[^\d,.\-]/g, '')
-    .replace(/\.(?=\d{3}(\D|$))/g, '')
-    .replace(',', '.');
+  const clean = input.replace(/[^\d,.\-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
   const n = Number(clean);
   return Number.isFinite(n) ? n : undefined;
 }
@@ -66,9 +62,7 @@ async function extractInBrowser(file: File) {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    text += (content.items as any[])
-      .map((it) => (typeof (it as any).str === 'string' ? (it as any).str : ''))
-      .join('\n') + '\n';
+    text += (content.items as any[]).map((it) => (typeof (it as any).str === 'string' ? (it as any).str : '')).join('\n') + '\n';
   }
   text = normalizeSpaces(text);
 
@@ -129,9 +123,8 @@ export default function PdfUploadPage() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // carpetas existentes (para "Elegir existente")
   const [folders, setFolders] = useState<string[]>([]);
-  const [mode, setMode] = useState<'new' | 'auto' | 'existing'>('existing'); // recomendada
+  const [mode, setMode] = useState<'new' | 'auto' | 'existing'>('existing');
   const [newFolder, setNewFolder] = useState('');
   const [selectedFolder, setSelectedFolder] = useState('');
 
@@ -142,9 +135,7 @@ export default function PdfUploadPage() {
       const res = await fetch('/api/pdf/all', { cache: 'no-store' });
       const data: InvoiceDTO[] = await res.json();
       const set = new Set<string>();
-      for (const d of data) {
-        set.add(groupKey(d as unknown as InvDTOFromUtils));
-      }
+      for (const d of data) set.add(groupKey(d as unknown as InvDTOFromUtils));
       setFolders(Array.from(set).sort((a, b) => a.localeCompare(b)));
     })();
   }, []);
@@ -183,17 +174,17 @@ export default function PdfUploadPage() {
     if (mode === 'new' && !newFolder.trim()) return setError('Ingresa el nombre de la carpeta nueva.');
 
     const folderName =
-      mode === 'existing' ? selectedFolder.trim()
-      : mode === 'new' ? newFolder.trim()
-      : '';
+      mode === 'existing' ? selectedFolder.trim() :
+      mode === 'new' ? newFolder.trim() :
+      '';
 
     setLoading(true);
     setProgress(15);
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('name', name.trim());        // título tal cual
-      formData.append('folderMode', mode);         // informa modo de carpeta
+      formData.append('name', name.trim());
+      formData.append('folderMode', mode);
       if (folderName) formData.append('folderName', folderName);
 
       if (meta?.proveedor) formData.append('proveedor', meta.proveedor);
@@ -211,6 +202,15 @@ export default function PdfUploadPage() {
 
       setResponse(data);
       setProgress(100);
+
+      // NUEVO: si se creó/eligió carpeta, recarga lista de carpetas para que aparezca al volver.
+      if (folderName) {
+        const resAll = await fetch('/api/pdf/all', { cache: 'no-store' });
+        const dataAll: InvoiceDTO[] = await resAll.json();
+        const set = new Set<string>();
+        for (const d of dataAll) set.add(groupKey(d as unknown as InvDTOFromUtils));
+        setFolders(Array.from(set).sort((a, b) => a.localeCompare(b)));
+      }
     } catch (err: any) {
       console.error('Upload error:', err);
       setError(err.message || 'Error al subir el archivo');
@@ -228,7 +228,6 @@ export default function PdfUploadPage() {
       </div>
 
       <div className="bg-white p-4 rounded-4 shadow-sm">
-        {/* Dropzone */}
         <div
           ref={dropRef}
           onDragOver={(e) => e.preventDefault()}
@@ -270,7 +269,6 @@ export default function PdfUploadPage() {
             />
           </div>
 
-          {/* Carpeta: Crear nueva | Automática | Elegir existente (recomendada) */}
           <div className="col-12">
             <label className="form-label fw-semibold">Carpeta</label>
             <div className="d-flex flex-wrap gap-3 align-items-center">
@@ -281,10 +279,9 @@ export default function PdfUploadPage() {
                   id="mode-new"
                   checked={mode === 'new'}
                   onChange={() => setMode('new')}
+                  disabled={loading}
                 />
-                <label className="form-check-label" htmlFor="mode-new">
-                  Crear nueva
-                </label>
+                <label className="form-check-label" htmlFor="mode-new">Crear nueva</label>
               </div>
 
               <div className="form-check">
@@ -294,10 +291,9 @@ export default function PdfUploadPage() {
                   id="mode-auto"
                   checked={mode === 'auto'}
                   onChange={() => setMode('auto')}
+                  disabled={loading}
                 />
-                <label className="form-check-label" htmlFor="mode-auto">
-                  Automática
-                </label>
+                <label className="form-check-label" htmlFor="mode-auto">Automática</label>
               </div>
 
               <div className="form-check">
@@ -307,6 +303,7 @@ export default function PdfUploadPage() {
                   id="mode-existing"
                   checked={mode === 'existing'}
                   onChange={() => setMode('existing')}
+                  disabled={loading}
                 />
                 <label className="form-check-label" htmlFor="mode-existing">
                   Elegir existente <span className="text-success">(recomendada)</span>
@@ -320,6 +317,7 @@ export default function PdfUploadPage() {
                   className="form-select"
                   value={selectedFolder}
                   onChange={(e) => setSelectedFolder(e.target.value)}
+                  disabled={loading}
                 >
                   <option value="">Selecciona una carpeta…</option>
                   {folders.map((f) => (
@@ -339,6 +337,7 @@ export default function PdfUploadPage() {
                   placeholder="Nombre de la nueva carpeta"
                   value={newFolder}
                   onChange={(e) => setNewFolder(e.target.value)}
+                  disabled={loading}
                 />
                 <div className="form-text">
                   Se creará/registrará la carpeta con ese nombre.
@@ -361,8 +360,7 @@ export default function PdfUploadPage() {
                 <div className="col-sm-4"><strong>Proveedor:</strong> {meta?.proveedor || '—'}</div>
                 <div className="col-sm-4"><strong>Folio:</strong> {meta?.folio || '—'}</div>
                 <div className="col-sm-4">
-                  <strong>Emisión:</strong>{' '}
-                  {meta?.fechaEmision ? new Date(meta.fechaEmision).toLocaleDateString() : '—'}
+                  <strong>Emisión:</strong> {meta?.fechaEmision ? new Date(meta.fechaEmision).toLocaleDateString() : '—'}
                 </div>
                 <div className="col-sm-4"><strong>Neto:</strong> {typeof meta?.neto === 'number' ? meta.neto.toLocaleString() : '—'}</div>
                 <div className="col-sm-4"><strong>IVA:</strong> {typeof meta?.iva === 'number' ? meta.iva.toLocaleString() : '—'}</div>

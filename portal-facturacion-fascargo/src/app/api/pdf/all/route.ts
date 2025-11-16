@@ -1,32 +1,39 @@
 // src/app/api/pdf/all/route.ts
+import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
-import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     await connectToDatabase();
 
-    const allPdfs = await Pdf.find().sort({ createdAt: -1 });
+    // Trae solo campos necesarios y asegura folderName
+    const docs = await Pdf.find({}, null, { sort: { createdAt: -1 } }).lean();
 
-    const result = allPdfs.map((doc) => ({
-      id: doc._id.toString(),
-      title: doc.title,
-      url: doc.url,
-      createdAt: doc.createdAt,
-      estadoPago: doc.estadoPago,
-      estadoSistema: doc.estadoSistema,
-      proveedor: doc.proveedor ?? null,
-      folio: doc.folio ?? null,
-      fechaEmision: doc.fechaEmision ?? null,
-      neto: typeof doc.neto === 'number' ? doc.neto : null,
-      iva: typeof doc.iva === 'number' ? doc.iva : null,
-      total: typeof doc.total === 'number' ? doc.total : null,
+    const out = (docs || []).map((d: any) => ({
+      id: String(d._id),
+      title: d.title ?? '',
+      url: d.url ?? '',
+      // 👇 clave para que aparezca la carpeta correcta
+      folderName: d.folderName ?? null,
+      estadoPago: d.estadoPago ?? 'pendiente',
+      estadoSistema: d.estadoSistema ?? 'uploaded',
+      proveedor: d.proveedor ?? null,
+      folio: d.folio ?? null,
+      neto: typeof d.neto === 'number' ? d.neto : null,
+      iva: typeof d.iva === 'number' ? d.iva : null,
+      total: typeof d.total === 'number' ? d.total : null,
+      fechaEmision: d.fechaEmision ?? null,
+      createdAt: d.createdAt ?? null,
+      updatedAt: d.updatedAt ?? null,
     }));
 
-    return NextResponse.json(result);
+    return NextResponse.json(out);
   } catch (err) {
-    console.error('Error al obtener PDFs:', err);
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    console.error('❌ /api/pdf/all error:', err);
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }

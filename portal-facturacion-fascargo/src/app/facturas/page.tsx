@@ -23,25 +23,29 @@ export default function FacturasFoldersPage() {
   const [createName, setCreateName] = useState('');
   const [createSearch, setCreateSearch] = useState('');
   const [createSelected, setCreateSelected] = useState<Set<string>>(new Set());
-  const pendingMoveInvoiceId = useRef<string | null>(null); // desde "Mover → Crear carpeta"
+  const [creating, setCreating] = useState(false); // <— NUEVO: spinner/disable mientras se mueve
+  const pendingMoveInvoiceId = useRef<string | null>(null);
 
-  // ===== Selección rápida en tarjetas inferiores =====
+  // ===== Selección rápida =====
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // ===== Carga inicial =====
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/pdf/all', { cache: 'no-store' });
-        const data = await res.json();
-        setAll(data || []);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    refreshAll();
   }, []);
 
-  // ===== Carpetas (derivadas) =====
+  const refreshAll = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/pdf/all', { cache: 'no-store' });
+      const data = await res.json();
+      setAll(data || []);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ===== Carpetas derivadas =====
   const folders = useMemo<Folder[]>(() => {
     const map = new Map<string, Folder>();
     for (const inv of all) {
@@ -70,27 +74,29 @@ export default function FacturasFoldersPage() {
   const folderNames = useMemo(() => folders.map((f) => f.name), [folders]);
 
   // ===== Helpers =====
-  const refreshAll = async () => {
-    const res = await fetch('/api/pdf/all', { cache: 'no-store' });
-    const data = await res.json();
-    setAll(data || []);
-  };
-
-  const moveInvoiceToFolder = async (invoiceId: string, folderName: string) => {
-    // Actualiza SOLO la carpeta (no toca el título personalizado)
+// dentro de src/app/facturas/page.tsx
+const moveInvoiceToFolder = async (invoiceId: string, folderName: string) => {
+  try {
     const res = await fetch(`/api/pdf/${invoiceId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folderName }),
     });
-    if (res.ok) await refreshAll();
-  };
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      console.error('PATCH /api/pdf/:id fallo:', e);
+      return;
+    }
+    await refreshAll(); // <-- recarga lista con folderName ya incluido
+  } catch (err) {
+    console.error('PATCH /api/pdf/:id error:', err);
+  }
+};
 
   // ====== Modal Crear Carpeta ======
   const openCreateModal = (suggest?: string, moveInvoiceId?: string) => {
     setCreateName(suggest ?? '');
     setCreateSearch('');
-    // Preselección si viene desde "Mover → Crear carpeta"
     const seed = new Set<string>();
     if (moveInvoiceId) seed.add(moveInvoiceId);
     setCreateSelected(seed);
@@ -99,6 +105,7 @@ export default function FacturasFoldersPage() {
   };
 
   const closeCreateModal = () => {
+    if (creating) return;
     setShowCreate(false);
     setCreateName('');
     setCreateSearch('');
@@ -106,7 +113,6 @@ export default function FacturasFoldersPage() {
     pendingMoveInvoiceId.current = null;
   };
 
-  // Lista filtrable dentro del modal
   const modalList = useMemo(() => {
     const term = createSearch.trim().toLowerCase();
     let arr = [...all].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
@@ -119,7 +125,7 @@ export default function FacturasFoldersPage() {
           groupKey(i).toLowerCase().includes(term),
       );
     }
-    return arr.slice(0, 50); // evita listas inmensas en el modal
+    return arr.slice(0, 50);
   }, [all, createSearch]);
 
   const toggleModalSelect = (id: string) => {
@@ -131,17 +137,17 @@ export default function FacturasFoldersPage() {
     });
   };
 
-  const createFolderAndMove = async () => {
-    const name = createName.trim();
-    if (!name) return;
-    if (createSelected.size === 0) return; // obliga a seleccionar ≥1
+const createFolderAndMove = async () => {
+  const name = createName.trim();
+  if (!name || createSelected.size === 0) return;
+  const ids = Array.from(createSelected);
 
-    const ids = Array.from(createSelected);
-    await Promise.all(ids.map((id) => moveInvoiceToFolder(id, name)));
-    closeCreateModal();
-  };
+  await Promise.all(ids.map((id) => moveInvoiceToFolder(id, name)));
+  await refreshAll();               // 👈 asegura que la grilla refleje la carpeta
+  closeCreateModal();
+};
 
-  // ===== Tarjetas “facturas sueltas” =====
+  // ===== Listado inferior =====
   const loose = useMemo(
     () => [...all].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
     [all],
@@ -165,8 +171,14 @@ export default function FacturasFoldersPage() {
   const moveSelectionTo = async (folderName: string) => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
-    await Promise.all(ids.map((id) => moveInvoiceToFolder(id, folderName)));
-    clearSelection();
+    try {
+      for (const id of ids) await moveInvoiceToFolder(id, folderName);
+      await refreshAll();
+    } catch (e) {
+      alert('No se pudo mover alguna factura');
+    } finally {
+      clearSelection();
+    }
   };
 
   // ===== UI =====
@@ -219,7 +231,14 @@ export default function FacturasFoldersPage() {
               onDragOver={(e) => e.preventDefault()}
               onDrop={async (e) => {
                 const id = e.dataTransfer.getData('text/invoice-id');
-                if (id) await moveInvoiceToFolder(id, f.name);
+                if (id) {
+                  try {
+                    await moveInvoiceToFolder(id, f.name);
+                    await refreshAll();
+                  } catch (err) {
+                    alert('No se pudo mover la factura');
+                  }
+                }
               }}
             >
               <div className="card-body d-flex flex-column">
@@ -264,7 +283,7 @@ export default function FacturasFoldersPage() {
         )}
       </div>
 
-      {/* Listado inferior de facturas */}
+      {/* Listado inferior */}
       <div className="d-flex align-items-center gap-2 mb-2">
         <i className="bi bi-journals"></i>
         <h5 className="m-0">Facturas (arrástralas a una carpeta)</h5>
@@ -300,8 +319,7 @@ export default function FacturasFoldersPage() {
                     <strong>Folio:</strong> {it.folio || '—'}
                   </div>
                   <div>
-                    <strong>Total:</strong>{' '}
-                    {CLP(typeof it.total === 'number' ? it.total : 0)}
+                    <strong>Total:</strong> {CLP(typeof it.total === 'number' ? it.total : 0)}
                   </div>
                 </div>
 
@@ -325,7 +343,14 @@ export default function FacturasFoldersPage() {
                         <li key={fn}>
                           <button
                             className="dropdown-item"
-                            onClick={() => moveInvoiceToFolder(it.id, fn)}
+                            onClick={async () => {
+                              try {
+                                await moveInvoiceToFolder(it.id, fn);
+                                await refreshAll();
+                              } catch {
+                                alert('No se pudo mover la factura');
+                              }
+                            }}
                           >
                             {fn}
                           </button>
@@ -423,7 +448,7 @@ export default function FacturasFoldersPage() {
         </div>
       )}
 
-      {/* ===== Modal Crear Carpeta (con buscador y selección obligatoria) ===== */}
+      {/* ===== Modal Crear Carpeta ===== */}
       {showCreate && (
         <div
           className="modal fade show"
@@ -433,7 +458,7 @@ export default function FacturasFoldersPage() {
             <div className="modal-content rounded-4">
               <div className="modal-header">
                 <h5 className="modal-title">Crear carpeta</h5>
-                <button className="btn-close" onClick={closeCreateModal}></button>
+                <button className="btn-close" onClick={closeCreateModal} disabled={creating}></button>
               </div>
 
               <div className="modal-body">
@@ -444,6 +469,7 @@ export default function FacturasFoldersPage() {
                     placeholder="Ej: Transporte Leis"
                     value={createName}
                     onChange={(e) => setCreateName(e.target.value)}
+                    disabled={creating}
                   />
                 </div>
 
@@ -457,6 +483,7 @@ export default function FacturasFoldersPage() {
                     placeholder="Buscar por título, folio, proveedor…"
                     value={createSearch}
                     onChange={(e) => setCreateSearch(e.target.value)}
+                    disabled={creating}
                   />
                 </div>
 
@@ -484,6 +511,7 @@ export default function FacturasFoldersPage() {
                                 checked={checked}
                                 onChange={() => toggleModalSelect(it.id)}
                                 aria-label={`Seleccionar ${it.title}`}
+                                disabled={creating}
                               />
                             </td>
                             <td className="text-truncate" style={{ maxWidth: 280 }}>
@@ -516,13 +544,13 @@ export default function FacturasFoldersPage() {
               </div>
 
               <div className="modal-footer">
-                <button className="btn btn-outline-secondary" onClick={closeCreateModal}>
+                <button className="btn btn-outline-secondary" onClick={closeCreateModal} disabled={creating}>
                   Cancelar
                 </button>
                 <button
                   className="btn btn-dark"
                   onClick={createFolderAndMove}
-                  disabled={!createName.trim() || createSelected.size === 0}
+                  disabled={!createName.trim() || createSelected.size === 0 || creating}
                   title={
                     !createName.trim()
                       ? 'Ingresa el nombre de la carpeta'
@@ -531,7 +559,7 @@ export default function FacturasFoldersPage() {
                       : 'Crear carpeta'
                   }
                 >
-                  Crear
+                  {creating ? 'Creando…' : 'Crear'}
                 </button>
               </div>
             </div>

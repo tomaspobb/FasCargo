@@ -35,37 +35,51 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
-    const name = (formData.get('name') as string | null)?.trim() || '';
+
+    // Título visible (obligatorio)
+    const rawName = (formData.get('name') as string | null) ?? '';
+    const name = rawName.trim();
     const uploadedBy = (formData.get('uploadedBy') as string | null) || undefined;
 
-    // NUEVO: carpeta seleccionada/creada
-    const folderMode = (formData.get('folderMode') as string | null) || 'auto';
-    const folderNameRaw = (formData.get('folderName') as string | null) || null;
-    const folderName = folderMode === 'auto'
-      ? null
-      : (folderNameRaw ? folderNameRaw.trim() : null);
+    // Modo de carpeta y nombre (opcional)
+    const folderModeRaw = (formData.get('folderMode') as string | null) || 'auto';
+    const folderMode = ['auto', 'new', 'existing'].includes(folderModeRaw) ? folderModeRaw : 'auto';
 
-    if (!file) return NextResponse.json({ error: 'Archivo no recibido' }, { status: 400 });
-    if (!name) return NextResponse.json({ error: 'Nombre no recibido' }, { status: 400 });
+    const folderNameRaw = (formData.get('folderName') as string | null) ?? null;
+    const folderName =
+      folderMode === 'auto'
+        ? null
+        : folderNameRaw && folderNameRaw.trim() ? folderNameRaw.trim() : null;
 
+    if (!file) {
+      return NextResponse.json({ error: 'Archivo no recibido' }, { status: 400 });
+    }
+    if (!name) {
+      return NextResponse.json({ error: 'Nombre no recibido' }, { status: 400 });
+    }
+
+    // PDF check (acepta tipo vacío si la extensión es .pdf)
     const isPdfMime = file.type === 'application/pdf';
     const isPdfName = /\.pdf$/i.test(file.name || '');
     if (!isPdfMime && !isPdfName) {
       return NextResponse.json({ error: 'Solo se permiten PDFs' }, { status: 415 });
     }
 
+    // Límite de tamaño (25MB)
     const MAX = 25 * 1024 * 1024;
     if (file.size > MAX) {
       return NextResponse.json({ error: 'El PDF supera 25MB' }, { status: 413 });
     }
 
+    // Metadatos opcionales parseados por el front
     const proveedor = (formData.get('proveedor') as string | null)?.trim() || undefined;
-    const folio     = (formData.get('folio') as string | null)?.trim() || undefined;
-    const neto      = toNum(formData.get('neto'));
-    const iva       = toNum(formData.get('iva'));
-    const total     = toNum(formData.get('total'));
+    const folio = (formData.get('folio') as string | null)?.trim() || undefined;
+    const neto = toNum(formData.get('neto'));
+    const iva = toNum(formData.get('iva'));
+    const total = toNum(formData.get('total'));
     const fechaEmision = toDate(formData.get('fechaEmision'));
 
+    // Subir a Blob (nombre estable con timestamp)
     const arrayBuffer = await file.arrayBuffer();
     const safe = slugify(name) || 'factura';
     const objectName = `pdfs/${safe}-${Date.now()}.pdf`;
@@ -77,6 +91,7 @@ export async function POST(req: Request) {
       cacheControlMaxAge: 60 * 60 * 24 * 365,
     });
 
+    // Guardar en Mongo
     await connectToDatabase();
 
     const estadoSistema: 'uploaded' | 'parsed' | 'validated' | 'rejected' =
@@ -88,7 +103,8 @@ export async function POST(req: Request) {
       title: name,
       url: blob.url,
       uploadedBy,
-      folderName, // guarda carpeta elegida/creada, o null si automática
+      // 👇 guarda carpeta elegida/creada; null si automática
+      folderName,
       estadoPago: 'pendiente',
       estadoSistema,
       proveedor,
@@ -99,24 +115,28 @@ export async function POST(req: Request) {
       fechaEmision,
     });
 
-    return NextResponse.json({
-      id: doc._id.toString(),
-      title: doc.title,
-      url: doc.url,
-      uploadedBy: doc.uploadedBy || null,
-      folderName: doc.folderName || null,
-      estadoPago: doc.estadoPago,
-      estadoSistema: doc.estadoSistema,
-      proveedor: doc.proveedor || null,
-      folio: doc.folio || null,
-      neto: typeof doc.neto === 'number' ? doc.neto : null,
-      iva: typeof doc.iva === 'number' ? doc.iva : null,
-      total: typeof doc.total === 'number' ? doc.total : null,
-      fechaEmision: doc.fechaEmision || null,
-      fechaPago: doc.fechaPago || null,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-    });
+    // Respuesta uniforme (incluye folderName para que el front lo muestre)
+    return NextResponse.json(
+      {
+        id: doc._id.toString(),
+        title: doc.title,
+        url: doc.url,
+        uploadedBy: doc.uploadedBy || null,
+        folderName: doc.folderName || null,
+        estadoPago: doc.estadoPago,
+        estadoSistema: doc.estadoSistema,
+        proveedor: doc.proveedor || null,
+        folio: doc.folio || null,
+        neto: typeof doc.neto === 'number' ? doc.neto : null,
+        iva: typeof doc.iva === 'number' ? doc.iva : null,
+        total: typeof doc.total === 'number' ? doc.total : null,
+        fechaEmision: doc.fechaEmision || null,
+        fechaPago: doc.fechaPago || null,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+      },
+      { status: 201 }
+    );
   } catch (err: any) {
     console.error('⛔ Error al subir PDF:', err);
     return NextResponse.json(

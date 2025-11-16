@@ -1,32 +1,41 @@
+// src/app/api/pdf/[id]/route.ts
+import { NextResponse } from 'next/server';
+import { del } from '@vercel/blob';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
-import { del } from '@vercel/blob';
-import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// PATCH: actualizar estadoPago, title y/o folderName
+// PATCH: actualizar title, folderName y/o estadoPago
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectToDatabase();
     const { id } = await params;
-    const body = await req.json().catch(() => ({} as any));
-
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
 
-    const update: any = {};
+    const body = (await req.json().catch(() => ({}))) as {
+      title?: string;
+      folderName?: string | null;
+      estadoPago?: string;
+    };
+
+    await connectToDatabase();
+
+    const update: Record<string, any> = {};
 
     if (typeof body.title === 'string' && body.title.trim()) {
       update.title = body.title.trim();
     }
 
-    if (typeof body.folderName === 'string') {
-      const f = body.folderName.trim();
-      update.folderName = f || null; // permite limpiar si llega vacío
+    if (body.folderName !== undefined) {
+      if (body.folderName === null) update.folderName = null;
+      else if (typeof body.folderName === 'string') {
+        const f = body.folderName.trim();
+        update.folderName = f || null;
+      }
     }
 
     if (typeof body.estadoPago === 'string') {
@@ -37,18 +46,22 @@ export async function PATCH(
       update.estadoPago = body.estadoPago;
     }
 
-    if (!Object.keys(update).length) {
+    if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: 'Sin cambios' }, { status: 400 });
     }
 
-    const doc = await Pdf.findByIdAndUpdate(id, update, { new: true });
+    const doc = await Pdf.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    });
+
     if (!doc) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
 
     return NextResponse.json({
       id: doc._id.toString(),
       title: doc.title,
       url: doc.url,
-      folderName: doc.folderName ?? null, // <—
+      folderName: doc.folderName ?? null, // 👈 vuelve serializado
       estadoPago: doc.estadoPago,
       estadoSistema: doc.estadoSistema,
       proveedor: doc.proveedor ?? null,
@@ -66,15 +79,16 @@ export async function PATCH(
   }
 }
 
-// DELETE (sin cambios salvo await params)
+// DELETE: elimina doc y blob (solo admin)
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectToDatabase();
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'ID no válido' }, { status: 400 });
+
+    await connectToDatabase();
 
     const adminEmails = ['topoblete@alumnos.uai.cl', 'fascargo.chile.spa@gmail.com'];
     const requester = (req.headers.get('x-user-email') || '').trim().toLowerCase();
@@ -86,10 +100,9 @@ export async function DELETE(
     if (!deleted) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 });
 
     try {
-      const blobPath = new URL(deleted.url).pathname.slice(1);
-      await del(blobPath);
+      if (deleted.url) await del(deleted.url);
     } catch (err) {
-      console.warn('⚠️ No se pudo eliminar el blob (puede que ya no exista):', err);
+      console.warn('⚠️ No se pudo eliminar el blob:', err);
     }
 
     return NextResponse.json({ message: 'Factura eliminada correctamente' });
