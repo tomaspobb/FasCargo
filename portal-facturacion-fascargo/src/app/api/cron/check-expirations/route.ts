@@ -38,7 +38,7 @@ export async function GET() {
         
         // ⚠️ IMPORTANTE: Aquí puedes forzar tu correo personal para la demo
         // Si lo dejas vacío, intentará usar el 'uploadedBy' o el del sistema
-        const destinatario = "TU_CORREO_PERSONAL@gmail.com"; 
+        const destinatario = "fascargo.chile.spa@gmail.com"; 
 
         if (destinatario) {
           console.log(`   🚀 Enviando alerta a: ${destinatario}`);
