@@ -118,7 +118,7 @@ export default function PdfUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
   
-  // === NUEVO: Estado para la fecha de vencimiento ===
+  // === NUEVO: Estado para la fecha de vencimiento (con hora) ===
   const [fechaVencimiento, setFechaVencimiento] = useState('');
 
   const [meta, setMeta] = useState<any>(null);
@@ -191,7 +191,7 @@ export default function PdfUploadPage() {
       formData.append('folderMode', mode);
       if (folderName) formData.append('folderName', folderName);
       
-      // === NUEVO: Enviamos la fecha de vencimiento si existe ===
+      // === NUEVO: Enviamos la fecha completa (ISO string) ===
       if (fechaVencimiento) {
         formData.append('fechaVencimiento', fechaVencimiento);
       }
@@ -277,11 +277,11 @@ export default function PdfUploadPage() {
             />
           </div>
 
-          {/* === CAMBIO DE TEXTO AQUÍ === */}
+          {/* === CAMBIO CLAVE: datetime-local para incluir hora === */}
           <div className="col-md-6">
-            <label className="form-label fw-semibold text-primary">Fecha de vencimiento para cumplir plazo</label>
+            <label className="form-label fw-semibold text-primary">Fecha y Hora de vencimiento</label>
             <input
-              type="date"
+              type="datetime-local" 
               value={fechaVencimiento}
               onChange={(e) => setFechaVencimiento(e.target.value)}
               className="form-control"
@@ -289,7 +289,7 @@ export default function PdfUploadPage() {
             />
             <div className="form-text small">Si la seleccionas, te avisaremos automáticamente.</div>
           </div>
-          {/* ============================= */}
+          {/* ===================================================== */}
 
           <div className="col-12">
             <label className="form-label fw-semibold">Carpeta</label>
@@ -418,7 +418,7 @@ export default function PdfUploadPage() {
               <div className="small">
                 <div><strong>Título:</strong> {response.title}</div>
                 {response.fechaVencimiento && (
-                   <div><strong>Vencimiento:</strong> {new Date(response.fechaVencimiento).toLocaleDateString()}</div>
+                   <div><strong>Vencimiento:</strong> {new Date(response.fechaVencimiento).toLocaleString()}</div>
                 )}
                 <div><strong>Carpeta:</strong> {response.folderName || '(automática por título)'}</div>
                 <div><strong>Subido el:</strong> {new Date(response.createdAt).toLocaleString()}</div>

@@ -1,9 +1,9 @@
-// src/app/facturas/[id]/page.tsx
 import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Pdf } from '@/models/Pdf';
 import { DeletePdfButton } from '@/components/DeletePdfButton';
 import { EditEstadoPago } from '@/components/EditEstadoPago';
+import { EditFechaVencimiento } from '@/components/EditFechaVencimiento'; // <--- IMPORTACIÓN NUEVA
 
 export const runtime = 'nodejs';
 
@@ -45,8 +45,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
       {/* Panel resumen */}
       <div className="bg-white rounded-4 shadow-sm p-4 mb-4">
-        <div className="row g-3 text-center">
-          <div className="col-md-3">
+        <div className="row g-3 text-center align-items-center">
+          <div className="col-md-2">
             <div className="fw-semibold text-muted small">Proveedor</div>
             <div>{pdf.proveedor || '—'}</div>
           </div>
@@ -54,10 +54,18 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
             <div className="fw-semibold text-muted small">Folio</div>
             <div>{pdf.folio || '—'}</div>
           </div>
-          <div className="col-md-3">
+          <div className="col-md-2">
             <div className="fw-semibold text-muted small">Emisión</div>
             <div>{formatDateSafe(pdf.fechaEmision)}</div>
           </div>
+          
+          {/* === COLUMNA NUEVA: VENCIMIENTO EDITABLE === */}
+          <div className="col-md-2">
+            <div className="fw-semibold text-primary small">Vencimiento</div>
+            <EditFechaVencimiento id={id} initial={pdf.fechaVencimiento} />
+          </div>
+          {/* =========================================== */}
+
           <div className="col-md-2">
             <div className="fw-semibold text-muted small">Estado</div>
             <EditEstadoPago id={id} initial={pdf.estadoPago} />
