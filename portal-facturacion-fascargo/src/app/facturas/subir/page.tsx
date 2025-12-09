@@ -117,6 +117,10 @@ async function extractInBrowser(file: File) {
 export default function PdfUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
+  
+  // === NUEVO: Estado para la fecha de vencimiento ===
+  const [fechaVencimiento, setFechaVencimiento] = useState('');
+
   const [meta, setMeta] = useState<any>(null);
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -186,6 +190,11 @@ export default function PdfUploadPage() {
       formData.append('name', name.trim());
       formData.append('folderMode', mode);
       if (folderName) formData.append('folderName', folderName);
+      
+      // === NUEVO: Enviamos la fecha de vencimiento si existe ===
+      if (fechaVencimiento) {
+        formData.append('fechaVencimiento', fechaVencimiento);
+      }
 
       if (meta?.proveedor) formData.append('proveedor', meta.proveedor);
       if (meta?.folio) formData.append('folio', meta.folio);
@@ -203,7 +212,6 @@ export default function PdfUploadPage() {
       setResponse(data);
       setProgress(100);
 
-      // NUEVO: si se creó/eligió carpeta, recarga lista de carpetas para que aparezca al volver.
       if (folderName) {
         const resAll = await fetch('/api/pdf/all', { cache: 'no-store' });
         const dataAll: InvoiceDTO[] = await resAll.json();
@@ -268,6 +276,20 @@ export default function PdfUploadPage() {
               required
             />
           </div>
+
+          {/* === CAMBIO DE TEXTO AQUÍ === */}
+          <div className="col-md-6">
+            <label className="form-label fw-semibold text-primary">Fecha de vencimiento para cumplir plazo</label>
+            <input
+              type="date"
+              value={fechaVencimiento}
+              onChange={(e) => setFechaVencimiento(e.target.value)}
+              className="form-control"
+              disabled={loading}
+            />
+            <div className="form-text small">Si la seleccionas, te avisaremos automáticamente.</div>
+          </div>
+          {/* ============================= */}
 
           <div className="col-12">
             <label className="form-label fw-semibold">Carpeta</label>
@@ -352,7 +374,6 @@ export default function PdfUploadPage() {
             )}
           </div>
 
-          {/* Metadatos */}
           <div className="col-12">
             <div className="bg-light rounded-3 p-3">
               <div className="fw-semibold mb-2">Metadatos detectados:</div>
@@ -396,6 +417,9 @@ export default function PdfUploadPage() {
               <h6 className="fw-bold mb-1">✅ PDF subido correctamente</h6>
               <div className="small">
                 <div><strong>Título:</strong> {response.title}</div>
+                {response.fechaVencimiento && (
+                   <div><strong>Vencimiento:</strong> {new Date(response.fechaVencimiento).toLocaleDateString()}</div>
+                )}
                 <div><strong>Carpeta:</strong> {response.folderName || '(automática por título)'}</div>
                 <div><strong>Subido el:</strong> {new Date(response.createdAt).toLocaleString()}</div>
               </div>

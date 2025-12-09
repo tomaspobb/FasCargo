@@ -23,6 +23,7 @@ function toNum(v: FormDataEntryValue | null) {
   const n = Number(s);
   return Number.isFinite(n) ? n : undefined;
 }
+
 function toDate(v: FormDataEntryValue | null) {
   if (v == null) return undefined;
   const s = String(v).trim();
@@ -78,6 +79,9 @@ export async function POST(req: Request) {
     const iva = toNum(formData.get('iva'));
     const total = toNum(formData.get('total'));
     const fechaEmision = toDate(formData.get('fechaEmision'));
+    
+    // === NUEVO: Recibimos la fecha de vencimiento ===
+    const fechaVencimiento = toDate(formData.get('fechaVencimiento'));
 
     // Subir a Blob (nombre estable con timestamp)
     const arrayBuffer = await file.arrayBuffer();
@@ -113,6 +117,7 @@ export async function POST(req: Request) {
       iva,
       total,
       fechaEmision,
+      fechaVencimiento, // <--- Guardamos el nuevo campo
     });
 
     // Respuesta uniforme (incluye folderName para que el front lo muestre)
@@ -131,6 +136,7 @@ export async function POST(req: Request) {
         iva: typeof doc.iva === 'number' ? doc.iva : null,
         total: typeof doc.total === 'number' ? doc.total : null,
         fechaEmision: doc.fechaEmision || null,
+        fechaVencimiento: doc.fechaVencimiento || null, // <--- Devolvemos el campo
         fechaPago: doc.fechaPago || null,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt,

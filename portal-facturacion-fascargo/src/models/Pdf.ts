@@ -21,6 +21,11 @@ export interface IPdf {
   proveedor?: string;
   fechaEmision?: Date;
   fechaPago?: Date | null;
+  
+  // === NUEVO CAMPO AÑADIDO (NO BORRÉ NADA) ===
+  fechaVencimiento?: Date; 
+  // ===========================================
+
   neto?: number;
   iva?: number;
   total?: number;
@@ -52,6 +57,11 @@ const PdfSchema = new Schema<IPdf>(
     proveedor: String,
     fechaEmision: Date,
     fechaPago: { type: Date, default: null },
+    
+    // === NUEVO CAMPO EN SCHEMA ===
+    fechaVencimiento: { type: Date, required: false },
+    // ============================
+
     neto: Number,
     iva: Number,
     total: Number,
@@ -59,5 +69,6 @@ const PdfSchema = new Schema<IPdf>(
   { timestamps: true }
 );
 
+// Mantenemos tu exportación original para no romper nada en el resto de la app
 export const Pdf: Model<IPdf> =
   mongoose.models.Pdf || mongoose.model<IPdf>("Pdf", PdfSchema);
